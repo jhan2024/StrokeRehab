@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand Rehabilitation Device Interface</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Flappy Bird CSS -->
+    <link rel="stylesheet" href="flappybird/css/main.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Side Panel for Hardware Control -->
+        <div class="side-panel">
+            <h2>Hardware Control</h2>
+            <div class="control-section">
+                <h3>Device Status</h3>
+                <div class="status-indicator connected">Connected</div>
+                <button class="control-btn">Disconnect</button>
+            </div>
+            
+            <div class="control-section">
+                <h3>Touch Visualization</h3>
+                <div class="touch-display">
+                    <!-- Canvas for touch point visualization with elliptical ball -->
+                    <canvas id="touchCanvas" width="200" height="200"></canvas>
+                </div>
+                <div class="force-levels">
+                    <div class="force-bar">
+                        <div class="force-level" style="height: 60%;"></div>
+                        <div class="force-label">Force</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <h3>Settings</h3>
+                <div class="setting-item">
+                    <label for="sensitivity">Sensitivity</label>
+                    <input type="range" id="sensitivity" min="1" max="10" value="5">
+                </div>
+                <div class="setting-item">
+                    <label for="threshold">Force Threshold</label>
+                    <input type="range" id="threshold" min="1" max="10" value="3">
+                </div>
+            </div>
+            
+            <button class="toggle-panel-btn">Hide Panel</button>
+        </div>
+        
+        <!-- Main Panel for Exercises and Measurement -->
+        <div class="main-panel">
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="exercises">Gamified Exercises</button>
+                <button class="tab-btn" data-tab="measurement">Measurement</button>
+                <button class="tab-btn" data-tab="debug">Debug</button>
+            </div>
+            
+            <!-- Exercises Tab Content -->
+            <div class="tab-content active" id="exercises">
+                <h2>Rehabilitation Games</h2>
+                <div class="game-selection">
+                    <div class="game-card" id="flappyBirdCard">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%232ecc71'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🐦%3C/text%3E%3C/svg%3E" alt="Flappy Bird Game">
+                        <h3>Flappy Bird</h3>
+                        <p>Control using pressure inputs</p>
+                        <button class="play-btn" id="playFlappyBird">Play</button>
+                    </div>
+                    <div class="game-card">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%23e74c3c'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🏌️%3C/text%3E%3C/svg%3E" alt="Golf Game">
+                        <h3>Mini Golf</h3>
+                        <p>Direction + Force control</p>
+                        <button class="play-btn">Play</button>
+                    </div>
+                    <div class="game-card">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%239b59b6'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🎹%3C/text%3E%3C/svg%3E" alt="Piano Game">
+                        <h3>Piano Keys</h3>
+                        <p>Multiple touch points exercise</p>
+                        <button class="play-btn">Play</button>
+                    </div>
+                    <div class="game-card">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%23f39c12'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🏃%3C/text%3E%3C/svg%3E" alt="Subway Surf Game">
+                        <h3>Subway Surf</h3>
+                        <p>Directional control with jumps</p>
+                        <button class="play-btn">Play</button>
+                    </div>
+                </div>
+                
+                <!-- Flappy Bird Game Container -->
+                <div id="flappyBirdGame" style="display: none;">
+                    <button id="closeFlappyBird" class="close-game-btn">Close Game</button>
+                    <div id="gamecontainer">
+                        <div id="gamescreen">
+                            <div id="sky" class="animated">
+                                <div id="flyarea">
+                                    <div id="ceiling" class="animated"></div>
+                                    <!-- This is the flying and pipe area container -->
+                                    <div id="player" class="bird animated"></div>
+                                    <div id="bigscore"></div>
+                                    <div id="splash"></div>
+                                    <div id="scoreboard">
+                                        <div id="medal"></div>
+                                        <div id="currentscore"></div>
+                                        <div id="highscore"></div>
+                                        <div id="replay"><img src="flappybird/assets/replay.png" alt="replay"></div>
+                                    </div>
+                                    <!-- Pipes go here! -->
+                                </div>
+                            </div>
+                            <div id="land" class="animated"><div id="debug"></div></div>
+                        </div>
+                    </div>
+                    <div class="boundingbox" id="playerbox"></div>
+                    <div class="boundingbox" id="pipebox"></div>
+                </div>
+            </div>
+            
+            <!-- Measurement Tab Content -->
+            <div class="tab-content" id="measurement">
+                <h2>Measurement</h2>
+                <div class="measurement-container">
+                    <div class="measurement-controls">
+                        <button class="measure-btn">Start Measurement</button>
+                        <button class="save-btn">Save Results</button>
+                        <div class="measurement-display">
+                            <h3>Current Session</h3>
+                            <div class="metric">
+                                <span class="metric-label">Max Force:</span>
+                                <span class="metric-value">6.7 N</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Average Force:</span>
+                                <span class="metric-value">4.2 N</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Duration:</span>
+                                <span class="metric-value">00:02:34</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="forceChart" width="600" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Debug Tab Content -->
+            <div class="tab-content" id="debugContent">
+                <h2>Arduino Debug</h2>
+                <div class="debug-container">
+                    <div class="connection-status">
+                        <h3>Connection Status</h3>
+                        <div class="debug-status-indicator disconnected">Disconnected</div>
+                        <div class="connection-controls">
+                            <button class="connect-btn">Connect to Arduino</button>
+                            <button class="simulation-toggle">Use Simulation</button>
+                        </div>
+                    </div>
+                    <div class="data-log-container">
+                        <h3>Input Data Log</h3>
+                        <div class="data-log">
+                            <div class="log-controls">
+                                <button class="log-btn start-log">Start Logging</button>
+                                <button class="log-btn clear-log">Clear Log</button>
+                            </div>
+                            <div class="log-display">
+                                <pre id="arduinoLog">No data received yet...</pre>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="sensor-readings">
+                        <h3>Live Sensor Readings</h3>
+                        <div class="sensor-grid">
+                            <div class="sensor-reading">
+                                <span class="sensor-label">Pressure:</span>
+                                <span class="sensor-value" id="pressureValue">0.00</span>
+                            </div>
+                            <div class="sensor-reading">
+                                <span class="sensor-label">Raw:</span>
+                                <span class="sensor-value" id="rawValue">0</span>
+                            </div>
+                            <div class="sensor-reading">
+                                <span class="sensor-label">Last Update:</span>
+                                <span class="sensor-value" id="lastUpdate">--:--:--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Scripts -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.transit/0.9.12/jquery.transit.min.js"></script>
+    <script src="flappybird/assets/placeholder.js"></script>
+    <script src="flappybird/js/flappybird.js"></script>
+    
+    <!-- Main Scripts -->
+    <script src="serial-simulator.js"></script>
+    <script src="script.js"></script>
+    <script src="img-placeholders.js"></script>
+</body>
+</html> 
