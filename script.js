@@ -477,10 +477,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const inputManager = new InputModeManager();
     window.inputManager = inputManager; // Keep global ref if needed by ArduinoConnection
 
-    // --- UI Update Logic (Responding to Events) ---
-    
-    // Status Message Display
+    // --- UI Element References (Cached) ---
+    const sidePanelConnectBtn = document.getElementById('side-panel-connect-btn'); // Assuming this ID for the blue button
+    const sidePanelStatusIndicator = document.querySelector('.side-panel .status-indicator');
     const statusMessageContainer = document.body; // Or a dedicated container
+    const debugPressureValue = document.getElementById('pressureValue');
+    const debugRawValue = document.getElementById('rawValue');
+    const debugLastUpdate = document.getElementById('lastUpdate');
+    const arduinoLogElement = document.getElementById('arduinoLog');
+    const measureBtn = document.querySelector('.measure-btn');
+    const saveBtn = document.querySelector('.save-btn');
+    const measurementDisplay = document.querySelector('.measurement-display');
+    const forceChartCanvas = document.getElementById('forceChart');
+    const touchCanvas = document.getElementById('touchCanvas');
+    const playFlappyBtn = document.getElementById('playFlappyBird');
+    const closeGameBtn = document.getElementById('closeFlappyBird');
+    const gameContainer = document.getElementById('flappyBirdGame');
+    let debugElements = {}; // Cache debug tab elements
+
+    // --- Event Listeners ---
+
+    // Status Message Display
     document.addEventListener(EVT_STATUS_MESSAGE, (event) => {
         const { message, type } = event.detail;
         const msgElement = document.createElement('div');
@@ -491,9 +508,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Debug Tab Updater
-    const debugPressureValue = document.getElementById('pressureValue');
-    const debugRawValue = document.getElementById('rawValue'); 
-    const debugLastUpdate = document.getElementById('lastUpdate');
     document.addEventListener(EVT_FORCE_UPDATE, (event) => {
         const { force, rawPressure } = event.detail;
         if (debugPressureValue) debugPressureValue.textContent = typeof rawPressure === 'number' && !isNaN(rawPressure) ? rawPressure.toFixed(2) : 'N/A'; 
@@ -502,7 +516,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Debug Tab Controls Updater (Mode Changes)
-    let debugElements = {}; // Cache elements
     document.addEventListener(EVT_MODE_CHANGED, (event) => {
         const { mode, isConnected } = event.detail; // Use event detail consistently
         console.log(`UI Listener: Mode changed to ${mode}, Connected: ${isConnected}`);
@@ -536,18 +549,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Update Side Panel Status (already using event detail correctly)
-        const sidePanelStatus = document.querySelector('.side-panel .status-indicator');
-        if(sidePanelStatus) {
-             const connected = event.detail.isConnected; 
-             const simMode = event.detail.mode === 'simulation'; 
-             sidePanelStatus.textContent = simMode ? 'Simulated' : (connected ? 'Connected' : 'Disconnected');
-             sidePanelStatus.classList.toggle('connected', simMode || connected);
-             sidePanelStatus.classList.toggle('disconnected', !simMode && !connected);
+        if (sidePanelStatusIndicator) {
+             const simMode = mode === 'simulation';
+             sidePanelStatusIndicator.textContent = simMode ? 'Simulated' : (isConnected ? 'Connected' : 'Disconnected');
+             sidePanelStatusIndicator.classList.toggle('connected', simMode || isConnected);
+             sidePanelStatusIndicator.classList.toggle('disconnected', !simMode && !isConnected);
+        }
+        
+        // Update Side Panel Connect Button State
+        if (sidePanelConnectBtn) {
+            if (mode === 'simulation') {
+                sidePanelConnectBtn.textContent = 'Simulated';
+                sidePanelConnectBtn.disabled = true;
+                sidePanelConnectBtn.classList.remove('connect', 'disconnect'); // Remove action classes
+                sidePanelConnectBtn.classList.add('simulated'); // Optional: Add styling for simulated state
+            } else { // Arduino Mode
+                sidePanelConnectBtn.disabled = false;
+                sidePanelConnectBtn.classList.remove('simulated');
+                if (isConnected) {
+                    sidePanelConnectBtn.textContent = 'Disconnect';
+                    sidePanelConnectBtn.classList.remove('connect');
+                    sidePanelConnectBtn.classList.add('disconnect'); // Optional: Class for styling disconnect state
+                } else {
+                    sidePanelConnectBtn.textContent = 'Connect';
+                    sidePanelConnectBtn.classList.remove('disconnect');
+                    sidePanelConnectBtn.classList.add('connect'); // Optional: Class for styling connect state
+                }
+            }
         }
     });
     
     // Debug Log Updater
-    const arduinoLogElement = document.getElementById('arduinoLog');
     document.addEventListener(EVT_LOG_MESSAGE, (event) => {
         if (!arduinoLogElement) return;
         const { timestamp, message } = event.detail;
@@ -564,10 +596,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Measurement Tab Logic (Event Listener)
-    const measureBtn = document.querySelector('.measure-btn');
-    const saveBtn = document.querySelector('.save-btn');
-    const measurementDisplay = document.querySelector('.measurement-display'); 
-    const forceChartCanvas = document.getElementById('forceChart');
     let measurementData = [];
     let isMeasuring = false;
     let measurementStartTime = 0;
@@ -736,7 +764,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- Side Panel Visualization ---
-    const touchCanvas = document.getElementById('touchCanvas');
     let touchCtx = null;
     let activePoint = null; 
 
@@ -866,9 +893,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // --- Flappy Bird Game Integration (Event Listener Based) ---
-    const playFlappyBtn = document.getElementById('playFlappyBird');
-    const closeGameBtn = document.getElementById('closeFlappyBird');
-    const gameContainer = document.getElementById('flappyBirdGame');
     let gameSpacebarTimeout = null; 
     let isGameControlActive = false; // Flag to enable/disable game control
 
@@ -1007,6 +1031,27 @@ document.addEventListener('DOMContentLoaded', function() {
      if (initialActiveTab && initialActiveTab.getAttribute('data-tab') === 'debug') {
          initializeDebugTab();
      }
+    
+    // Side Panel Connect Button Listener
+    if (sidePanelConnectBtn) {
+        sidePanelConnectBtn.addEventListener('click', async () => {
+            // Button only active in Arduino mode
+            if (inputManager.currentMode === 'arduino') {
+                if (inputManager.arduino.isConnected) {
+                    console.log("Side Panel Button: Attempting disconnect...");
+                    await inputManager.arduino.disconnect();
+                } else {
+                    console.log("Side Panel Button: Attempting connect...");
+                    await inputManager.arduino.connect(); // This triggers the port selection
+                }
+                // UI update will happen via the EVT_MODE_CHANGED event dispatched by connect/disconnect
+            } else {
+                console.log("Side Panel Button: Inactive in Simulation mode.");
+            }
+        });
+    } else {
+        console.warn("Side panel connect button (#side-panel-connect-btn) not found.");
+    }
     
     console.log("DOM fully loaded and script executed.");
 
