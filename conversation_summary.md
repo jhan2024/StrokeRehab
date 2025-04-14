@@ -11,92 +11,78 @@
 - **Device Status**: Shows connection status with connect/disconnect functionality
 - **Touch Visualization**: 3D ellipsoid representing the device with interactive touch points
 - **Force Measurement**: Visual bar showing pressure applied to the device
-- **Settings**: Sensitivity and force threshold adjustments
+- **Settings**: Sensitivity and force threshold adjustments (Note: Sliders are present but not currently connected)
 - **Panel Toggle**: Option to hide/show the control panel
 
 ### Gamified Exercises
 - Multiple rehabilitation games including:
   - Flappy Bird (1D control)
-  - Mini Golf (direction + force control)
-  - Piano Keys (multiple touch points)
-  - Subway Surf (directional control with jumps)
+  - (Placeholders for Mini Golf, Piano Keys, Subway Surf)
 - Game cards with visual representations and play functionality
 
 ### Measurement Panel
-- Real-time force measurement visualization
+- Real-time force measurement visualization using Chart.js
 - Data collection with start/stop functionality
-- Results saving capability
+- Results saving capability (currently logs to console)
 - Force vs. time graphical representation
+- Display of Max Force, Average Force, and Duration
+
+### Debug Panel
+- Connection status indicator (Simulated/Connected/Disconnected)
+- Buttons to connect/disconnect from Arduino (in Arduino mode)
+- Button to switch between Simulation and Arduino modes
+- Live display of raw pressure and normalized force values
+- Input data log with Start/Stop/Clear functionality (logging driven by simulator)
 
 ## Interactive Features
-- **Force Control**: Spacebar-controlled pressure simulation (hold to increase, release to reset)
-- **Touch Visualization**: Click to create temporary touch points on the device
-- **Real-time Feedback**: Visual indicators for force and touch points
+- **Force Control**: 
+    - **Simulation Mode**: Spacebar press/hold controls simulated pressure, which drives UI and game.
+    - **Arduino Mode**: Real sensor data drives UI and game.
+- **Touch Visualization**: Click to create temporary touch points on the device ellipsoid.
+- **Real-time Feedback**: Visual indicators for force (bar, ellipsoid touch point size), debug values, and measurement chart.
 
 ## Implemented Games
 
 ### Flappy Bird
-- **Implementation**: Integrated based on the popular nebez/floppybird open-source project
-- **Adaptations for Stroke Patients**:
-  - Reduced gravity (0.15 instead of 0.25)
-  - Lower jump power (-3.6 instead of -4.6)
-  - Slower game speed (40 FPS instead of 60)
-  - Wider pipe openings (160px instead of 90px)
-  - Longer intervals between pipes (2100ms instead of 1400ms)
-- **Rehabilitation Focus**:
-  - Connected to force measurement via spacebar control
-  - Variable jump height based on applied force (50-150% of normal jump power)
-  - Simple 1D control ideal for early rehabilitation stages
-- **Game Interface**:
-  - Full-screen immersive experience
-  - Score tracking and achievement medals
-  - Accessible replay functionality
-  - Game launches from main exercise selection screen
+- **Implementation**: Integrated based on nebez/floppybird.
+- **Adaptations**: Reduced gravity, jump power, speed; wider pipes, longer intervals.
+- **Rehabilitation Focus**: Connected to force measurement via event listener (`forceupdate`). Jump triggered when normalized force exceeds threshold.
+- **Interface**: Launches in overlay, close button returns to main view.
 
-## Arduino Integration
+## Arduino Integration & Simulation
 
 ### Communication Architecture
-- **Web Serial API**: Direct browser-to-Arduino communication
-- **Dual Mode System**:
-  - Arduino Mode: Real hardware force sensor readings
-  - Simulation Mode: Spacebar-based force input for testing
-- **Mode Switching**: Seamless toggle between hardware and simulation
-- **Browser Compatibility**:
-  - Full functionality in Chrome and Edge
-  - Simulation-only in Safari and Firefox
+- **Primary Method**: Web Serial API for direct browser-to-Arduino communication (via `window._realNavigatorSerial` if available).
+- **Simulation**: Built-in simulator (`window.serialSimulatorInstance`) mimics the `SerialPort` interface.
+- **No `navigator.serial` Modification**: Code uses either the real API or the simulator instance based on application state, avoiding direct modification of `navigator.serial`.
+- **Event-Driven Data Flow**: Components communicate via Custom Events (`forceupdate`, `modechanged`, `sim-control`, `statusmessage`, `logmessage`) dispatched on `document`.
+- **`InputModeManager`**: Manages the current mode (`simulation` or `arduino`), connects/disconnects the appropriate source (`ArduinoConnection`), and dispatches events.
+- **`ArduinoConnection`**: Handles port connection (real or simulated), reading, data normalization, and calling `InputModeManager.handleForceUpdate`.
+- **Simulator Control**: In simulation mode, spacebar events dispatch `sim-control` events, which the simulator instance listens for to adjust its generated pressure.
 
 ### Signal Processing
-- Arduino transmits force values (0-1023) over serial connection
-- Interface normalizes values to 0-1 range
-- Normalized force updates visualization, game control, and measurements
-- Configurable force threshold for game control activation
+- **Input**: Accepts raw pressure values (e.g., Pascals) from Arduino or simulator.
+- **Normalization**: Converts raw pressure to a 0-1 normalized force value based on defined `basePressure` and `pressureRange`.
+- **Output**: Dispatches `forceupdate` event containing both `force` (0-1) and `rawPressure`.
+- **Threshold**: `InputModeManager` holds `GAME_FORCE_THRESHOLD` used by game listeners.
 
-### Force Data Flow
-1. Arduino reads analog force sensor values
-2. Serial communication transmits values to interface
-3. ArduinoConnection class processes incoming data
-4. InputModeManager routes force data to appropriate components
-5. Real-time UI updates reflect force input
-6. Force exceeding threshold triggers game actions
-
-### Implementation Features
-- **Game Control Integration**: Force signals mapped to game inputs
-- **Measurement Recording**: Captures time-series force data
-- **Visual Feedback**: Real-time force bar updates
-- **Error Handling**: Graceful fallbacks for connection issues
-- **Code Structure**: Object-oriented design with clear separation of concerns
+### Force Data Flow (Event-Driven)
+1. Arduino/Simulator provides pressure data.
+2. `ArduinoConnection.startReading` reads and normalizes data.
+3. `ArduinoConnection` calls `InputModeManager.handleForceUpdate`.
+4. `InputModeManager` dispatches `forceupdate` event with `{ force, rawPressure }`.
+5. UI listeners (Debug, Measurement, Visualization, Game) receive the event and update accordingly.
 
 ## Design Decisions
-- Clean, intuitive interface focused on rehabilitation purposes
-- High contrast visuals for accessibility
-- Temporary touch points reflecting actual device behavior
-- Force bar resets when control is released
-- 3D visualization of ellipsoidal device for better representation
-- Adaptable game difficulty for patients with different abilities
-- Dual-mode input system for development and deployment flexibility
+- **Event-Driven Architecture**: Decouples UI components, improving maintainability.
+- **Simulator as Port Object**: Simulator mimics the `SerialPort` interface for consistent handling by `ArduinoConnection`.
+- **Global Instances**: Minimal use (`window._realNavigatorSerial`, `window.serialSimulatorInstance`, `window.inputManager`) where necessary for cross-module access or state management.
+- Clean interface, focus on rehabilitation, temporary touch points, force bar resets (via simulator logic).
+- Dual-mode input system for development and deployment flexibility.
 
 ## Next Steps
-1. ✅ Integrate with Arduino hardware device
-2. Implement additional game functionalities
-3. ✅ Connect force measurement to device readings
-6. Add progress tracking and rehabilitation analytics 
+1. Connect and test with actual Arduino hardware device.
+2. Implement functionality for Settings sliders (Sensitivity, Threshold).
+3. Implement remaining games.
+4. Develop Therapist interface and data storage/analytics.
+5. Refine UI/UX based on testing. 

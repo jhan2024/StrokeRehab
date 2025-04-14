@@ -5,17 +5,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to switch tabs
     function switchTab(tabId) {
-        // Hide all tabs
         document.querySelectorAll('.tab-content').forEach(tab => {
             tab.classList.remove('active');
         });
-        
-        // Deactivate all buttons
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.classList.remove('active');
         });
         
-        // Show selected tab
         const tabElementId = tabId === 'debug' ? 'debugContent' : tabId;
         const selectedTab = document.getElementById(tabElementId);
         const selectedBtn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
@@ -23,15 +19,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (selectedTab && selectedBtn) {
             selectedTab.classList.add('active');
             selectedBtn.classList.add('active');
-            
-            // Initialize debug tab if needed
             if (tabId === 'debug') {
-                initializeDebugTab();
+                initializeDebugTab(); // Re-initialize event listeners if needed
             }
         }
     }
     
-    // Set up tab button click handlers
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
             const tabId = button.getAttribute('data-tab');
@@ -45,1022 +38,976 @@ document.addEventListener('DOMContentLoaded', function() {
     const mainPanel = document.querySelector('.main-panel');
     
     togglePanelBtn.addEventListener('click', () => {
+        sidePanel.classList.toggle('hidden');
         if (sidePanel.classList.contains('hidden')) {
-            // Show panel
-            sidePanel.classList.remove('hidden');
-            sidePanel.style.marginLeft = '0';
-            mainPanel.style.marginLeft = '0';
-            mainPanel.style.width = 'calc(100% - 280px)';
-            togglePanelBtn.textContent = 'Hide Panel';
-        } else {
-            // Hide panel
-            sidePanel.classList.add('hidden');
             sidePanel.style.marginLeft = '-280px';
             mainPanel.style.width = '100%';
             mainPanel.style.marginLeft = '0';
             togglePanelBtn.textContent = 'Show Panel';
+        } else {
+            sidePanel.style.marginLeft = '0';
+            mainPanel.style.width = 'calc(100% - 280px)';
+             mainPanel.style.marginLeft = '0'; // Ensure main panel doesn't shift unexpectedly
+            togglePanelBtn.textContent = 'Hide Panel';
         }
     });
     
-    // Arduino Communication Class
+    // --- Event Names --- (Define constants for event names)
+    const EVT_FORCE_UPDATE = 'forceupdate';
+    const EVT_MODE_CHANGED = 'modechanged';
+    const EVT_SIM_CONTROL = 'sim-control';
+    const EVT_STATUS_MESSAGE = 'statusmessage';
+    const EVT_LOG_MESSAGE = 'logmessage';
+    
+    // --- Arduino Communication Class (Minor change: dispatch status) ---
     class ArduinoConnection {
         constructor() {
             this.port = null;
             this.reader = null;
-            this.writer = null;
             this.isConnected = false;
-            this.onForceUpdate = null;
-            
-            // Check if Web Serial API is supported
             this.isWebSerialSupported = 'serial' in navigator;
         }
 
         async connect() {
-            // If Web Serial API is not supported, show error and return false
-            if (!this.isWebSerialSupported) {
-                console.error('Web Serial API is not supported in this browser');
-                
-                const errorMsg = document.createElement('div');
-                errorMsg.className = 'status-message error';
-                errorMsg.textContent = 'Web Serial API not supported in this browser. Try Chrome or Edge.';
-                document.body.appendChild(errorMsg);
-                setTimeout(() => errorMsg.remove(), 5000);
-                
-                return false;
-            }
+            // Determine which serial source to use based on the Input Manager's state
+            const useSimulator = window.inputManager && window.inputManager.currentMode === 'simulation';
+            const serialSource = useSimulator ? null : window._realNavigatorSerial; // Use null for simulator path, real API otherwise
             
+            console.log(`ArduinoConnection.connect called. Mode: ${inputManager.currentMode}, UseSimulator: ${useSimulator}`);
+
+            if (!useSimulator && !serialSource) {
+                 console.error('Arduino Mode Error: Real Web Serial API not available.');
+                 document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { detail: { message: 'Real Web Serial API not supported or available.', type: 'error' } }));
+                 return false;
+            }
+             if (useSimulator && !window.serialSimulatorInstance) {
+                  console.error('Simulation Mode Error: Simulator instance not found!');
+                  document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { detail: { message: 'Simulator instance not found. Please reload.', type: 'error' } }));
+                  return false;
+             }
+
             try {
-                // Request port access
-                this.port = await navigator.serial.requestPort();
-                await this.port.open({ baudRate: 9600 });
-                
+                if (useSimulator) {
+                    console.log("Connecting to SIMULATOR...");
+                    this.port = window.serialSimulatorInstance; // Assign the simulator instance
+                    if (!this.port.isOpen) {
+                        console.log("Simulator port was closed, reopening...");
+                         await this.port.open({ baudRate: 9600 }); // Open the simulator port
+                    }
+                    console.log("Simulator port assigned and confirmed open.");
+                } else {
+                    // Using REAL Web Serial API
+                    console.log("Requesting REAL serial port from user...");
+                    // Use the stored real API object to request port
+                    this.port = await serialSource.requestPort(); 
+                    console.log("Real port received:", this.port);
+                    await this.port.open({ baudRate: 9600 });
+                    console.log("Real port opened.");
+                }
+
+                // Common connection logic 
                 this.isConnected = true;
-                this.startReading();
-                
-                // Create status message
-                const statusMsg = document.createElement('div');
-                statusMsg.className = 'status-message success';
-                statusMsg.textContent = 'Arduino connected successfully!';
-                document.body.appendChild(statusMsg);
-                setTimeout(() => statusMsg.remove(), 3000);
-                
+                document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { 
+                    detail: { 
+                        message: useSimulator ? 'Simulator connected successfully!' : 'Device connected successfully!', 
+                        type: 'success' 
+                    } 
+                }));
+                this.updateDebugUIState(true);
+                this.startReading(); 
                 return true;
+
             } catch (error) {
                 console.error('Connection error:', error);
-                
-                // Create error message
-                const errorMsg = document.createElement('div');
-                errorMsg.className = 'status-message error';
-                errorMsg.textContent = 'Failed to connect: ' + error.message;
-                document.body.appendChild(errorMsg);
-                setTimeout(() => errorMsg.remove(), 3000);
-                
-                return false;
+                 let message = `Failed to connect: ${error.message}`;
+                 if (error.name === 'NotFoundError' || error.name === 'NotAllowedError') {
+                     message = 'Port selection cancelled or denied.';
+                 }
+                  document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { 
+                     detail: { message: message, type: 'error' } 
+                  }));
+                 this.isConnected = false;
+                 this.port = null; 
+                 this.updateDebugUIState(false);
+                 return false;
             }
         }
 
         async disconnect() {
+            console.log("Disconnecting...");
+            const wasConnected = this.isConnected;
+            this.isConnected = false; // Set disconnected state early
+            
             if (this.reader) {
-                await this.reader.cancel();
+                try {
+                    await this.reader.cancel('Disconnecting'); 
+                    console.log("Reader cancelled.");
+                } catch(e) { console.error("Error cancelling reader:", e);}
+                 this.reader = null;
             }
+
+            // this.port could be the simulator instance or a real port object
             if (this.port) {
-                await this.port.close();
+                 try {
+                    // close() should work for both real ports and our simulator instance
+                    await this.port.close(); 
+                    console.log("Port closed.");
+                } catch (e) { console.error("Error closing port:", e); }
+                this.port = null;
             }
-            this.isConnected = false;
+
+             if (wasConnected) { // Only show message if we were actually connected
+                 document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { 
+                    detail: { message: 'Device/Simulator disconnected.', type: 'error' } 
+                 }));
+             }
+            this.updateDebugUIState(false);
+        }
+
+        updateDebugUIState(connected) {
+             const debugStatusIndicator = document.querySelector('#debugContent .debug-status-indicator');
+             const connectBtn = document.querySelector('#debugContent .connect-btn');
+             if (!debugStatusIndicator || !connectBtn) return; 
+
+             if(connected) {
+                 debugStatusIndicator.textContent = 'Connected';
+                 debugStatusIndicator.classList.remove('disconnected');
+                 debugStatusIndicator.classList.add('connected');
+                 connectBtn.textContent = 'Disconnect';
+             } else {
+                  debugStatusIndicator.textContent = 'Disconnected';
+                 debugStatusIndicator.classList.remove('connected');
+                 debugStatusIndicator.classList.add('disconnected');
+                 connectBtn.textContent = 'Connect to Arduino';
+             }
         }
 
         async startReading() {
-            while (this.port.readable && this.isConnected) {
-                this.reader = this.port.readable.getReader();
+            console.log("Starting read loop...");
+            // Ensure we are connected before proceeding
+            if (!this.isConnected || !this.port || !this.port.readable) {
+                 console.log("Cannot start reading: not connected or port not readable.");
+                 return;
+            }
+            
+            // Keep reading until disconnect is called or an error occurs
+            while (this.isConnected) {
+                // Get reader within the loop in case of reconnection/re-establishment needs
+                 if (!this.reader) {
+                     try {
+                         this.reader = this.port.readable.getReader();
+                         console.log("Reader obtained.");
+                     } catch (readerError) {
+                         console.error("Error getting reader:", readerError);
+                         await this.disconnect();
+                         break; // Exit outer loop on reader error
+                     }
+                 }
+
+                let rawValue = NaN; 
                 try {
-                    while (true) {
-                        const { value, done } = await this.reader.read();
-                        if (done) break;
-                        console.log('connected is ', this.isConnected);
-                        console.log('value is ', value);
-                        console.log('done is ', done);
-                        
-                        // Process the received force data
-                        const forceValue = new TextDecoder().decode(value);
-                        const normalizedForce = (parseFloat(forceValue) - 101300) / 101300; 
-                        console.log('normalizedForce is ', normalizedForce);
-                        
-                        // Update force visualization
-                        if (typeof currentForce !== 'undefined') {
-                            currentForce = normalizedForce;
-                            updateForceBar();
-                            drawEllipsoid();
-                        }
-                        
-                        // Update measurement if active
-                        if (this.onForceUpdate) {
-                            this.onForceUpdate(normalizedForce);
-                        }
+                    // console.log("Attempting to read...");
+                    const { value, done } = await this.reader.read();
+                    
+                    if (done) {
+                        console.log("Reader reported done=true. Stream likely closed.");
+                        this.reader.releaseLock(); // Release lock as per spec
+                        this.reader = null;
+                         // Assume disconnection if stream ends unexpectedly
+                         if (this.isConnected) {
+                            console.log("Stream ended unexpectedly, disconnecting...");
+                             await this.disconnect();
+                         }
+                        break; // Exit outer loop
                     }
+                    
+                    // Process the received data
+                    const rawValueString = new TextDecoder().decode(value).trim(); 
+                    rawValue = parseFloat(rawValueString); 
+                    let normalizedForce = 0;
+
+                    // Example: If data is just `rawValue`
+                    if (!isNaN(rawValue)) {
+                        // Check if it looks like 0-1023 (less likely now)
+                         if (rawValue >= 0 && rawValue <= 1023) {
+                             normalizedForce = rawValue / 1023.0;
+                         } else { // Assume pressure
+                             const basePressure = 101300; 
+                             const pressureRange = 1000;  
+                             normalizedForce = (rawValue - basePressure) / pressureRange;
+                             normalizedForce = Math.max(0, Math.min(1, normalizedForce)); 
+                         }
+                         // Directly call the InputModeManager's handler
+                         if (window.inputManager) {
+                             window.inputManager.handleForceUpdate(normalizedForce, rawValue);
+                         } else {
+                              console.error("InputManager instance not found!");
+                         }
+                    } else {
+                         console.warn("Received non-numeric data:", rawValueString);
+                         // Optionally pass NaN or skip update
+                         // if (this.onForceUpdate) this.onForceUpdate(0, NaN);
+                    }
+
                 } catch (error) {
                     console.error('Read error:', error);
-                } finally {
-                    this.reader.releaseLock();
-                }
+                    if (this.reader) {
+                         this.reader.releaseLock();
+                         this.reader = null;
+                    }
+                    // Disconnect on error
+                    await this.disconnect();
+                    break; // Exit outer loop
+                } 
+                // No finally block needed here as lock release/disconnect handled in catch/done
             }
-        }
-
-        setForceUpdateCallback(callback) {
-            this.onForceUpdate = callback;
+            console.log("Exited read loop.");
         }
     }
 
-    // Add mode switch in the control section
+    // --- Input Mode Manager Class (Major changes: Events, no callbacks) ---
     class InputModeManager {
         constructor() {
             this.arduino = new ArduinoConnection();
+            this.currentMode = window._realNavigatorSerial ? 'arduino' : 'simulation';
+            console.log(`InputModeManager initial mode: ${this.currentMode}`);
             
-            // Start in simulation mode by default, or if Web Serial API is not supported
-            this.currentMode = this.arduino.isWebSerialSupported ? 'simulation' : 'simulation';
-            
-            // Add browser compatibility warning if needed
-            if (!this.arduino.isWebSerialSupported) {
-                const warningMsg = document.createElement('div');
-                warningMsg.className = 'browser-warning';
-                warningMsg.innerHTML = '<strong>Note:</strong> Arduino connection requires Chrome or Edge browser. Using simulation mode only.';
-                document.querySelector('.control-section').prepend(warningMsg);
-            }
-
-            this.onForceUpdate = null;
-            this.currentForce = 0;
+            this.currentForce = 0; 
             this.spacebarPressed = false;
             this.spacebarHoldStartTime = 0;
-            this.MAX_FORCE_TIME = 3000;
-            this.forceUpdateInterval = null;
-            this.gameControlCallback = null; // Add callback for game control
-            this.GAME_FORCE_THRESHOLD = 0.3; // Threshold for game control activation
-            
-            // Add debug callbacks
-            this.onDebugUpdate = null;
-            this.isLoggingData = false;
+            this._boundKeyDown = null; 
+            this._boundKeyUp = null;   
+            this.GAME_FORCE_THRESHOLD = 0.3; 
+
+             // Add browser compatibility warning if needed (only if real serial is attempted)
+             if (!this.arduino.isWebSerialSupported) {
+                 const warningMsg = document.createElement('div');
+                 warningMsg.className = 'browser-warning';
+                 warningMsg.innerHTML = '<strong>Note:</strong> Real Arduino connection requires Chrome or Edge. Simulator available.';
+                 const firstControlSection = document.querySelector('.side-panel .control-section');
+                 if (firstControlSection) {
+                     firstControlSection.parentNode.insertBefore(warningMsg, firstControlSection);
+                 } else {
+                     document.querySelector('.side-panel').prepend(warningMsg); // Fallback
+                 }
+             }
+             
+             // Set initial state after a short delay
+             setTimeout(() => {
+                 if (this.currentMode === 'simulation') {
+                     this.setupSpacebarListeners();
+                     this.arduino.connect(); // Auto-connect (connect handles setting callbacks implicitly now)
+                 } else {
+                     this.cleanupSpacebarListeners();
+                 }
+                 // Dispatch initial mode state
+                 document.dispatchEvent(new CustomEvent(EVT_MODE_CHANGED, { detail: { mode: this.currentMode, isConnected: this.arduino.isConnected } }));
+             }, 150); // Slightly longer delay for init
         }
 
         async switchMode(mode) {
-            // If trying to switch to Arduino mode but not supported, stay in simulation
-            if (mode === 'arduino' && !this.arduino.isWebSerialSupported) {
-                const errorMsg = document.createElement('div');
-                errorMsg.className = 'status-message error';
-                errorMsg.textContent = 'Arduino mode not available in this browser. Use Chrome or Edge.';
-                document.body.appendChild(errorMsg);
-                setTimeout(() => errorMsg.remove(), 3000);
-                
-                // Stay in simulation mode
-                this.updateModeUI();
+             console.log(`Attempting to switch mode to: ${mode}`);
+             // Prevent switching to Arduino if real API doesn't exist
+             if (mode === 'arduino' && !window._realNavigatorSerial) { 
+                this.arduino.showStatusMessage('Cannot switch to Arduino mode: Real Web Serial API not available.', 'error');
+                this.updateModeUI(); // Revert UI
                 return;
-            }
-            
+             }
+             
             if (mode === this.currentMode) return;
 
-            // Clean up current mode
-            if (this.currentMode === 'arduino' && this.arduino.isConnected) {
-                await this.arduino.disconnect();
-            } else if (this.currentMode === 'simulation') {
-                this.cleanupSpacebarListeners();
+            // --- Cleanup Current Mode --- 
+            console.log(`Cleaning up previous mode: ${this.currentMode}`);
+            // Disconnect regardless of previous mode (safer)
+             if (this.arduino.isConnected) {
+                 await this.arduino.disconnect();
+             }
+             // Manage listeners based on the mode we are *leaving*
+            if (this.currentMode === 'simulation') {
+                 this.cleanupSpacebarListeners();
+                 // Close the simulator port instance when leaving simulation mode
+                 if (window.serialSimulatorInstance && window.serialSimulatorInstance.isOpen) {
+                     await window.serialSimulatorInstance.close();
+                     console.log("Closed simulator port instance.");
+                 }
+            } else { // Leaving Arduino mode
+                this.cleanupSpacebarListeners(); // Ensure listeners off
             }
 
+            // --- Set and Setup New Mode --- 
             this.currentMode = mode;
+            console.log(`Set currentMode to: ${this.currentMode}`);
 
-            // Setup new mode
-            if (mode === 'arduino') {
-                const connected = await this.arduino.connect();
+            if (this.currentMode === 'simulation') {
+                // Auto-connect to simulator when switching to sim mode
+                console.log("Setting up simulation mode: Auto-connecting...");
+                const connected = await this.arduino.connect(); // connect() knows to use simulator
                 if (connected) {
-                    this.arduino.setForceUpdateCallback((force) => this.handleForceUpdate(force));
+                    this.setupSpacebarListeners(); // Enable spacebar control
                 } else {
-                    // If connection fails, fall back to simulation
-                    this.currentMode = 'simulation';
-                    this.setupSpacebarListeners();
+                     console.error("Failed to auto-connect to simulator during switch!");
                 }
-            } else {
-                this.setupSpacebarListeners();
+            } else { // 'arduino' mode
+                // Don't auto-connect. Set callback, ready for user action.
+                 console.log("Switched to Arduino mode. Ready for user connection.");
             }
 
-            // Update UI
-            this.updateModeUI();
+            this.updateModeUI(); // Update UI to reflect the final state
             
-            // Update debug tab if it exists
-            if (debugStatusIndicator) {
-                if (this.currentMode === 'arduino' && this.arduino.isConnected) {
-                    debugStatusIndicator.textContent = 'Connected';
-                    debugStatusIndicator.classList.remove('disconnected');
-                    debugStatusIndicator.classList.add('connected');
-                    connectBtn.textContent = 'Disconnect';
-                    connectBtn.classList.add('disconnect');
-                } else {
-                    debugStatusIndicator.textContent = 'Disconnected';
-                    debugStatusIndicator.classList.remove('connected');
-                    debugStatusIndicator.classList.add('disconnected');
-                    connectBtn.textContent = 'Connect to Arduino';
-                    connectBtn.classList.remove('disconnect');
-                }
-            }
+            // Dispatch mode change event AFTER attempting connection/setup
+            document.dispatchEvent(new CustomEvent(EVT_MODE_CHANGED, { detail: { mode: this.currentMode, isConnected: this.arduino.isConnected } }));
         }
-
-        handleForceUpdate(force) {
-            this.currentForce = force;
-            if (this.onForceUpdate) {
-                this.onForceUpdate(force);
-            }
+        
+        // Central handler - now dispatches forceupdate event
+        handleForceUpdate(normalizedForce, rawPressure) {
+            this.currentForce = normalizedForce; 
+            // console.log(`InputManager: Handling force update. Force: ${normalizedForce.toFixed(3)}, Raw: ${rawPressure}`); // Log 1
             
-            // Handle game control
-            if (this.gameControlCallback) {
-                // If force exceeds threshold, trigger game control
-                if (force > this.GAME_FORCE_THRESHOLD) {
-                    this.gameControlCallback(force);
-                }
-            }
-            
-            updateForceBar();
-            drawEllipsoid();
-            
-            // Update debug values if debug tab is active
-            if (this.onDebugUpdate && (this.isLoggingData || document.getElementById('debug').classList.contains('active'))) {
-                const rawVal = Math.round(force * 1023);
-                this.onDebugUpdate(force, rawVal);
-            }
+            // Dispatch event with both values
+            // console.log(`InputManager: Dispatching ${EVT_FORCE_UPDATE}`); // Log 2
+            document.dispatchEvent(new CustomEvent(EVT_FORCE_UPDATE, { 
+                detail: { force: normalizedForce, rawPressure: rawPressure }
+            }));
         }
 
         setupSpacebarListeners() {
-            document.addEventListener('keydown', this.handleKeyDown.bind(this));
-            document.addEventListener('keyup', this.handleKeyUp.bind(this));
+            this.cleanupSpacebarListeners(); // Ensure no duplicates
+            this._boundKeyDown = this.handleKeyDown.bind(this);
+            this._boundKeyUp = this.handleKeyUp.bind(this);
+            document.addEventListener('keydown', this._boundKeyDown);
+            document.addEventListener('keyup', this._boundKeyUp);
+            console.log("Spacebar listeners ADDED for simulator control");
         }
 
         cleanupSpacebarListeners() {
-            document.removeEventListener('keydown', this.handleKeyDown.bind(this));
-            document.removeEventListener('keyup', this.handleKeyUp.bind(this));
-            if (this.forceUpdateInterval) {
-                clearInterval(this.forceUpdateInterval);
+            if (this._boundKeyDown) {
+                document.removeEventListener('keydown', this._boundKeyDown);
+                this._boundKeyDown = null;
             }
+            if (this._boundKeyUp) {
+                document.removeEventListener('keyup', this._boundKeyUp);
+                this._boundKeyUp = null;
+            }
+            // Ensure simulator state is reset if listeners removed while key was down
+             if (this.spacebarPressed) {
+                 this.spacebarPressed = false;
+                 if (window.serialSimulatorInstance && typeof window.serialSimulatorInstance.stopForceIncrease === 'function') {
+                     window.serialSimulatorInstance.stopForceIncrease(0); // Reset simulator immediately
+                 }
+                 this.spacebarHoldStartTime = 0;
+             }
+            console.log("Spacebar listeners REMOVED");
         }
 
+        // Spacebar handlers - now dispatch sim-control events
         handleKeyDown(e) {
-            if (e.code === 'Space' && !this.spacebarPressed && this.currentMode === 'simulation') {
-                this.spacebarPressed = true;
-                this.spacebarHoldStartTime = Date.now();
-                
-                this.forceUpdateInterval = setInterval(() => {
-                    const holdTime = Date.now() - this.spacebarHoldStartTime;
-                    this.currentForce = Math.min(1, holdTime / this.MAX_FORCE_TIME);
-                    this.handleForceUpdate(this.currentForce);
-                }, 50);
-                
-                const spacebarIndicator = document.createElement('div');
-                spacebarIndicator.className = 'spacebar-indicator';
-                spacebarIndicator.textContent = 'SPACEBAR PRESSED';
-                document.body.appendChild(spacebarIndicator);
-                
-                e.preventDefault();
+            if (!this._boundKeyDown) return; 
+            if (e.code === 'Space' && !this.spacebarPressed) {
+                 if (this.currentMode === 'simulation' || (this.currentMode === 'arduino' && window.serialSimulatorInstance?.isOpen)) { // Allow control if sim is underlying port in arduino mode
+                    this.spacebarPressed = true;
+                    this.spacebarHoldStartTime = Date.now();
+                    // Dispatch event to control simulator
+                    document.dispatchEvent(new CustomEvent(EVT_SIM_CONTROL, { detail: { action: 'start' } }));
+                    e.preventDefault(); 
+                 } 
             }
         }
 
         handleKeyUp(e) {
-            if (e.code === 'Space' && this.currentMode === 'simulation') {
-                this.spacebarPressed = false;
-                if (this.forceUpdateInterval) {
-                    clearInterval(this.forceUpdateInterval);
-                }
-                
-                this.currentForce = 0;
-                this.handleForceUpdate(this.currentForce);
-                
-                const indicator = document.querySelector('.spacebar-indicator');
-                if (indicator) {
-                    indicator.remove();
-                }
-                
-                e.preventDefault();
+             if (!this._boundKeyUp) return; 
+             if (e.code === 'Space' && this.spacebarPressed) {
+                 if (this.currentMode === 'simulation' || (this.currentMode === 'arduino' && window.serialSimulatorInstance?.isOpen)) {
+                    this.spacebarPressed = false;
+                    const holdDuration = Date.now() - this.spacebarHoldStartTime;
+                    // Dispatch event to control simulator
+                    document.dispatchEvent(new CustomEvent(EVT_SIM_CONTROL, { detail: { action: 'stop', duration: holdDuration } }));
+                     this.spacebarHoldStartTime = 0;
+                    e.preventDefault();
+                 }
             }
         }
 
         updateModeUI() {
-            const statusIndicator = document.querySelector('.status-indicator');
-            const controlBtn = document.querySelector('.control-btn');
-            const modeSwitch = document.querySelector('.mode-switch');
-            
-            if (this.currentMode === 'arduino') {
-                modeSwitch.textContent = 'Switch to Simulation';
-                if (this.arduino.isConnected) {
-                    statusIndicator.textContent = 'Connected to Arduino';
-                    statusIndicator.classList.add('connected');
-                    statusIndicator.classList.remove('disconnected');
-                    controlBtn.textContent = 'Disconnect';
-                }
-            } else {
-                modeSwitch.textContent = 'Switch to Arduino';
-                statusIndicator.textContent = 'Simulation Mode';
-                statusIndicator.classList.remove('connected', 'disconnected');
-                statusIndicator.classList.add('simulation');
-                controlBtn.textContent = 'Connect';
-            }
-        }
+            // Update Debug Tab UI elements based on this.currentMode
+            console.log(`Updating UI for mode: ${this.currentMode}`);
+             const simToggle = document.querySelector('#debugContent .simulation-toggle');
+             const connectBtn = document.querySelector('#debugContent .connect-btn');
+             const statusIndicator = document.querySelector('#debugContent .debug-status-indicator');
 
-        setForceUpdateCallback(callback) {
-            this.onForceUpdate = callback;
-            if (this.currentMode === 'arduino') {
-                this.arduino.setForceUpdateCallback(callback);
-            }
-        }
-
-        setGameControlCallback(callback) {
-            this.gameControlCallback = callback;
-        }
-
-        setDebugUpdateCallback(callback) {
-            this.onDebugUpdate = callback;
-        }
-        
-        setLoggingState(isLogging) {
-            this.isLoggingData = isLogging;
+             if (this.currentMode === 'simulation') {
+                 if (simToggle) {
+                     simToggle.classList.add('active');
+                     simToggle.textContent = 'Using Simulation';
+                 }
+                 // Disable connect button in sim mode as connection is automatic
+                 if (connectBtn) connectBtn.disabled = true; 
+                 if (statusIndicator) { // Show simulator as 'connected' conceptually
+                      statusIndicator.textContent = 'Simulated'; 
+                      statusIndicator.classList.remove('disconnected');
+                      statusIndicator.classList.add('connected'); // Use connected style for sim
+                 }
+             } else { // 'arduino' mode
+                 if (simToggle) {
+                     simToggle.classList.remove('active');
+                     simToggle.textContent = 'Use Simulation';
+                 }
+                  // Enable connect button in Arduino mode
+                  if (connectBtn) connectBtn.disabled = false; 
+                 // Status indicator reflects actual connection state (updated by connect/disconnect)
+                 if (statusIndicator) {
+                     const connected = this.arduino.isConnected;
+                     statusIndicator.textContent = connected ? 'Connected' : 'Disconnected';
+                     statusIndicator.classList.toggle('connected', connected);
+                     statusIndicator.classList.toggle('disconnected', !connected);
+                 }
+             }
+             // Update Side Panel status indicator
+             const sidePanelStatus = document.querySelector('.side-panel .status-indicator');
+             if(sidePanelStatus) {
+                 const connected = this.arduino.isConnected;
+                 const simMode = this.currentMode === 'simulation';
+                 sidePanelStatus.textContent = simMode ? 'Simulated' : (connected ? 'Connected' : 'Disconnected');
+                 sidePanelStatus.classList.toggle('connected', simMode || connected);
+                 sidePanelStatus.classList.toggle('disconnected', !simMode && !connected);
+             }
         }
     }
 
-    // Initialize the input mode manager
+    // --- Initialize Input Manager ---
     const inputManager = new InputModeManager();
+    window.inputManager = inputManager; // Keep global ref if needed by ArduinoConnection
 
-    // Modify the existing control button handler
-    const controlBtn = document.querySelector('.control-btn');
-    const statusIndicator = document.querySelector('.status-indicator');
-
-    // Create and add mode switch button
-    const modeSwitch = document.createElement('button');
-    modeSwitch.className = 'mode-switch';
-    modeSwitch.textContent = 'Switch to Arduino';
-    controlBtn.parentElement.insertBefore(modeSwitch, controlBtn.nextSibling);
-
-    // Add event listener for mode switch
-    modeSwitch.addEventListener('click', async () => {
-        const newMode = inputManager.currentMode === 'arduino' ? 'simulation' : 'arduino';
-        await inputManager.switchMode(newMode);
+    // --- UI Update Logic (Responding to Events) ---
+    
+    // Status Message Display
+    const statusMessageContainer = document.body; // Or a dedicated container
+    document.addEventListener(EVT_STATUS_MESSAGE, (event) => {
+        const { message, type } = event.detail;
+        const msgElement = document.createElement('div');
+        msgElement.className = `status-message ${type}`;
+        msgElement.textContent = message;
+        statusMessageContainer.appendChild(msgElement);
+        setTimeout(() => msgElement.remove(), 3000);
     });
 
-    // Modify control button handler
-    controlBtn.addEventListener('click', async () => {
-        if (inputManager.currentMode === 'arduino') {
-            if (inputManager.arduino.isConnected) {
-                await inputManager.arduino.disconnect();
-                statusIndicator.classList.remove('connected');
-                statusIndicator.classList.add('disconnected');
-                statusIndicator.textContent = 'Disconnected';
-                controlBtn.textContent = 'Connect';
-            } else {
-                const connected = await inputManager.arduino.connect();
-                if (connected) {
-                    statusIndicator.classList.remove('disconnected');
-                    statusIndicator.classList.add('connected');
-                    statusIndicator.textContent = 'Connected';
-                    controlBtn.textContent = 'Disconnect';
-                }
-            }
+    // Debug Tab Updater
+    const debugPressureValue = document.getElementById('pressureValue');
+    const debugRawValue = document.getElementById('rawValue'); 
+    const debugLastUpdate = document.getElementById('lastUpdate');
+    document.addEventListener(EVT_FORCE_UPDATE, (event) => {
+        const { force, rawPressure } = event.detail;
+        if (debugPressureValue) debugPressureValue.textContent = typeof rawPressure === 'number' && !isNaN(rawPressure) ? rawPressure.toFixed(2) : 'N/A'; 
+        if (debugRawValue) debugRawValue.textContent = typeof force === 'number' ? force.toFixed(3) : 'N/A'; 
+        if (debugLastUpdate) debugLastUpdate.textContent = new Date().toLocaleTimeString();
+    });
+
+    // Debug Tab Controls Updater (Mode Changes)
+    let debugElements = {}; // Cache elements
+    document.addEventListener(EVT_MODE_CHANGED, (event) => {
+        const { mode, isConnected } = event.detail; // Use event detail consistently
+        console.log(`UI Listener: Mode changed to ${mode}, Connected: ${isConnected}`);
+        
+        // Query elements if not cached
+        if (!debugElements.connectBtn) { 
+            debugElements.connectBtn = document.querySelector('#debugContent .connect-btn');
+            debugElements.simulationToggle = document.querySelector('#debugContent .simulation-toggle');
+            debugElements.startLogBtn = document.querySelector('#debugContent .start-log');
+            debugElements.clearLogBtn = document.querySelector('#debugContent .clear-log');
+            debugElements.debugStatusIndicator = document.querySelector('#debugContent .debug-status-indicator'); // Cache this too
+         }
+        
+        const simToggle = debugElements.simulationToggle;
+        const connectBtn = debugElements.connectBtn;
+        const statusIndicator = debugElements.debugStatusIndicator; 
+        
+        // Update Debug Tab elements based on event detail
+        if (mode === 'simulation') {
+             if (simToggle) { simToggle.classList.add('active'); simToggle.textContent = 'Using Simulation'; }
+             if (connectBtn) connectBtn.disabled = true; 
+             if (statusIndicator) { statusIndicator.textContent = 'Simulated'; statusIndicator.className = 'debug-status-indicator connected'; }
+        } else { // Arduino mode
+             if (simToggle) { simToggle.classList.remove('active'); simToggle.textContent = 'Use Simulation'; }
+             if (connectBtn) connectBtn.disabled = false; 
+             if (statusIndicator) {
+                 // Use isConnected from event detail
+                 statusIndicator.textContent = isConnected ? 'Connected' : 'Disconnected';
+                 statusIndicator.className = `debug-status-indicator ${isConnected ? 'connected' : 'disconnected'}`;
+             }
+        }
+        
+        // Update Side Panel Status (already using event detail correctly)
+        const sidePanelStatus = document.querySelector('.side-panel .status-indicator');
+        if(sidePanelStatus) {
+             const connected = event.detail.isConnected; 
+             const simMode = event.detail.mode === 'simulation'; 
+             sidePanelStatus.textContent = simMode ? 'Simulated' : (connected ? 'Connected' : 'Disconnected');
+             sidePanelStatus.classList.toggle('connected', simMode || connected);
+             sidePanelStatus.classList.toggle('disconnected', !simMode && !connected);
         }
     });
+    
+    // Debug Log Updater
+    const arduinoLogElement = document.getElementById('arduinoLog');
+    document.addEventListener(EVT_LOG_MESSAGE, (event) => {
+        if (!arduinoLogElement) return;
+        const { timestamp, message } = event.detail;
+        let currentLog = arduinoLogElement.textContent;
+        currentLog += `[${timestamp}] ${message}\n`;
+        const maxLogLines = 100;
+        const lines = currentLog.split('\n');
+        if (lines.length > maxLogLines + 1) { 
+            arduinoLogElement.textContent = lines.slice(-(maxLogLines + 1)).join('\n');
+        } else {
+            arduinoLogElement.textContent = currentLog;
+        }
+        arduinoLogElement.scrollTop = arduinoLogElement.scrollHeight;
+    });
 
-    // Modify the measurement functionality to use input manager
+    // Measurement Tab Logic (Event Listener)
     const measureBtn = document.querySelector('.measure-btn');
-    let isRecording = false;
+    const saveBtn = document.querySelector('.save-btn');
+    const measurementDisplay = document.querySelector('.measurement-display'); 
+    const forceChartCanvas = document.getElementById('forceChart');
     let measurementData = [];
-    let startTime = null;
+    let isMeasuring = false;
+    let measurementStartTime = 0;
+    let maxForce = 0;
+    let forceSum = 0;
+    let dataCount = 0;
+    let measurementInterval = null; // To update duration display
+    let chartInstance = null; // For Chart.js
 
-    if (measureBtn) {
-        measureBtn.addEventListener('click', () => {
-            if (!isRecording) {
-                isRecording = true;
-                measurementData = [];
-                startTime = Date.now();
-                measureBtn.textContent = 'Stop Measurement';
-                measureBtn.classList.add('recording');
-                
-                inputManager.setForceUpdateCallback((force) => {
-                    const timestamp = Date.now() - startTime;
-                    measurementData.push({ timestamp, force });
-                    updateMeasurementDisplay(force);
-                });
-            } else {
-                isRecording = false;
-                measureBtn.textContent = 'Start Measurement';
-                measureBtn.classList.remove('recording');
-                inputManager.setForceUpdateCallback(null);
-                
-                if (measurementData.length > 0) {
-                    const forces = measurementData.map(d => d.force);
-                    const maxForce = Math.max(...forces);
-                    const avgForce = forces.reduce((a, b) => a + b, 0) / forces.length;
-                    const duration = formatDuration(Date.now() - startTime);
-                    
-                    updateMeasurementMetrics(maxForce, avgForce, duration);
-                    drawMeasurementChart();
-                }
-            }
-        });
-    }
-
-    function updateMeasurementDisplay(force) {
-        const maxForceElement = document.querySelector('.metric-value:nth-child(1)');
-        const avgForceElement = document.querySelector('.metric-value:nth-child(2)');
-        const durationElement = document.querySelector('.metric-value:nth-child(3)');
+    // Function called by InputModeManager when force updates during measurement
+    function recordMeasurement(force) {
+        if (!isMeasuring || typeof force !== 'number' || isNaN(force)) return;
+        const timestamp = Date.now() - measurementStartTime;
+        measurementData.push({ x: timestamp, y: force });
+        maxForce = Math.max(maxForce, force);
+        forceSum += force;
+        dataCount++;
         
-        if (maxForceElement && avgForceElement && durationElement) {
-            const forces = measurementData.map(d => d.force);
-            const maxForce = Math.max(...forces);
-            const avgForce = forces.reduce((a, b) => a + b, 0) / forces.length;
-            const duration = formatDuration(Date.now() - startTime);
+        // Update chart (throttled or batched updates might be better for performance)
+        if (chartInstance) {
+            const timeLabel = (timestamp / 1000).toFixed(1);
+            // Add data point
+            chartInstance.data.labels.push(timeLabel + 's');
+            chartInstance.data.datasets[0].data.push(force);
             
-            updateMeasurementMetrics(maxForce, avgForce, duration);
+            // Limit chart history length for performance
+             const MAX_CHART_POINTS = 200;
+            while (chartInstance.data.labels.length > MAX_CHART_POINTS) {
+                chartInstance.data.labels.shift();
+                chartInstance.data.datasets[0].data.shift();
+            }
+            chartInstance.update('none'); // Update without animation
         }
+        // Update metrics display immediately (or throttle this too?)
+        // updateMeasurementDisplayMetrics(); // Call the specific metrics update
+        // console.log(`recordMeasurement: Recorded force: ${force.toFixed(3)}`); // Log 5
     }
+    
+    // Update only the numeric metrics
+     function updateMeasurementDisplayMetrics() {
+         const avgForce = dataCount > 0 ? forceSum / dataCount : 0;
+         const maxForceEl = measurementDisplay?.querySelector('.metric:nth-child(1) .metric-value');
+         const avgForceEl = measurementDisplay?.querySelector('.metric:nth-child(2) .metric-value');
+         
+         if(maxForceEl) maxForceEl.textContent = `${(maxForce * 10).toFixed(1)} N`; // Example scale 0-1 -> 0-10N
+         if(avgForceEl) avgForceEl.textContent = `${(avgForce * 10).toFixed(1)} N`;
+     }
 
-    function updateMeasurementMetrics(maxForce, avgForce, duration) {
-        const maxForceElement = document.querySelector('.metric-value');
-        const avgForceElement = document.querySelector('.metric-value:nth-child(2)');
-        const durationElement = document.querySelector('.metric-value:nth-child(3)');
-        
-        if (maxForceElement) maxForceElement.textContent = `${(maxForce * 10).toFixed(1)} N`;
-        if (avgForceElement) avgForceElement.textContent = `${(avgForce * 10).toFixed(1)} N`;
-        if (durationElement) durationElement.textContent = duration;
+    // Update only the duration metric
+    function updateMeasurementDuration() {
+        if (!isMeasuring && measurementData.length === 0) return; // Don't update if stopped & no data
+         const duration = isMeasuring ? Date.now() - measurementStartTime : (measurementData.length > 0 ? measurementData[measurementData.length - 1].x : 0);
+         const durationEl = measurementDisplay?.querySelector('.metric:nth-child(3) .metric-value');
+         if(durationEl) durationEl.textContent = formatDuration(duration);
     }
 
     function formatDuration(ms) {
-        const seconds = Math.floor(ms / 1000);
-        const minutes = Math.floor(seconds / 60);
-        const hours = Math.floor(minutes / 60);
-        return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
 
-    function drawMeasurementChart() {
-        const canvas = document.getElementById('forceChart');
-        if (!canvas || !measurementData.length) return;
-        
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw chart axes
-        ctx.beginPath();
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 2;
-        ctx.moveTo(50, 20);
-        ctx.lineTo(50, canvas.height - 30);
-        ctx.lineTo(canvas.width - 20, canvas.height - 30);
-        ctx.stroke();
-        
-        // Plot data points
-        const xScale = (canvas.width - 70) / measurementData[measurementData.length - 1].timestamp;
-        const yScale = (canvas.height - 50) / 1;
-        
-        ctx.beginPath();
-        ctx.strokeStyle = '#3498db';
-        ctx.lineWidth = 2;
-        measurementData.forEach((point, i) => {
-            const x = 50 + point.timestamp * xScale;
-            const y = canvas.height - 30 - (point.force * yScale);
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+    function initializeChart() {
+        if (!forceChartCanvas) return;
+        if (chartInstance) chartInstance.destroy(); 
+        const ctx = forceChartCanvas.getContext('2d');
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], 
+                datasets: [{
+                    label: 'Normalized Force (0-1)',
+                    data: [], 
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    borderWidth: 1,
+                    pointRadius: 0, // Hide points for cleaner line
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1.0, 
+                        title: { display: true, text: 'Normalized Force' }
+                    },
+                    x: {
+                         type: 'category', // Use category for time labels
+                         title: { display: true, text: 'Time (s)' }
+                    }
+                },
+                animation: false, 
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
+            }
         });
-        ctx.stroke();
     }
-    
-    // Canvas drawing placeholder (for touch visualization)
+
+    // Measurement Button Listeners
+    if (measureBtn) {
+        measureBtn.addEventListener('click', () => {
+            if (!isMeasuring) {
+                // Start Measurement
+                isMeasuring = true;
+                measureBtn.textContent = 'Stop Measurement';
+                measureBtn.classList.add('recording');
+                saveBtn.disabled = true;
+                // Reset data and metrics
+                measurementData = [];
+                maxForce = 0;
+                forceSum = 0;
+                dataCount = 0;
+                measurementStartTime = Date.now();
+                
+                initializeChart(); // Reset chart
+                updateMeasurementDisplayMetrics(); // Reset metrics display
+                updateMeasurementDuration(); // Reset duration display
+                
+                // Start intervals for updating display
+                if (measurementInterval) clearInterval(measurementInterval);
+                measurementInterval = setInterval(() => {
+                    // Update duration and metrics separately
+                    updateMeasurementDuration();
+                    updateMeasurementDisplayMetrics(); 
+                }, 200); // Update display fairly often
+
+            } else {
+                // Stop Measurement
+                isMeasuring = false;
+                measureBtn.textContent = 'Start Measurement';
+                measureBtn.classList.remove('recording');
+                saveBtn.disabled = measurementData.length === 0; // Enable save only if data exists
+                
+                clearInterval(measurementInterval);
+                measurementInterval = null;
+                // Final update of display
+                updateMeasurementDisplayMetrics(); 
+                updateMeasurementDuration(); 
+                 // Keep chart data visible after stop
+            }
+        });
+    }
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            if (measurementData.length === 0) {
+                alert("No measurement data to save.");
+                return;
+            }
+            // Basic save: Log data to console
+            const finalDuration = measurementData.length > 0 ? measurementData[measurementData.length - 1].x : 0;
+            const finalAvg = dataCount > 0 ? forceSum / dataCount : 0;
+            console.log("--- Measurement Results ---");
+            console.log(`Duration: ${formatDuration(finalDuration)}`);
+            console.log(`Max Force (0-1): ${maxForce.toFixed(3)}`);
+            console.log(`Average Force (0-1): ${finalAvg.toFixed(3)}`);
+            console.log("Raw Data Points:", measurementData);
+            console.log("---------------------------");
+            alert("Measurement data saved (logged to console).");
+            // Future: Convert measurementData to CSV and trigger download
+            saveBtn.disabled = true; // Disable after saving once
+        });
+    }
+
+    // --- Side Panel Visualization ---
     const touchCanvas = document.getElementById('touchCanvas');
+    let touchCtx = null;
+    let activePoint = null; 
+
+    // Define functions globally FIRST as stubs, potentially overwritten later
+    window.updateForceBar = (force) => { console.warn("updateForceBar stub called - canvas missing?"); };
+    window.drawEllipsoid = (force) => { console.warn("drawEllipsoid stub called - canvas missing?"); };
+
+    // Only define actual drawing functions and listeners if canvas exists
     if (touchCanvas) {
-        const ctx = touchCanvas.getContext('2d');
+        touchCtx = touchCanvas.getContext('2d');
         
-        // Track touch points
-        const touchPoints = [];
-        
-        // Track force level and spacebar state
-        let currentForce = 0.6;
-        let spacebarPressed = false;
-        let spacebarHoldStartTime = 0;
-        const MAX_FORCE_TIME = 3000; // 3 seconds to reach max force
-        let activePoint = null; // Track the current active touch point
-        
-        // Draw the 3D ellipsoid with touch points
-        function drawEllipsoid() {
-            ctx.clearRect(0, 0, touchCanvas.width, touchCanvas.height);
+        // Define ACTUAL drawing function, overwriting stub
+        window.drawEllipsoid = function(currentForce = 0) { 
+            if (!touchCtx) return;
+             const forceToDraw = typeof currentForce === 'number' && !isNaN(currentForce) ? currentForce : 0;
             
+            touchCtx.clearRect(0, 0, touchCanvas.width, touchCanvas.height);
             const centerX = touchCanvas.width / 2;
             const centerY = touchCanvas.height / 2;
             const radiusX = touchCanvas.width / 2 - 30;
             const radiusY = touchCanvas.height / 2 - 40;
-            
-            // Create 3D effect with gradient
-            const gradient = ctx.createRadialGradient(
+            const gradient = touchCtx.createRadialGradient(
                 centerX - radiusX * 0.3, centerY - radiusY * 0.3, radiusX * 0.1,
                 centerX, centerY, radiusX
             );
             gradient.addColorStop(0, '#4a6279');
             gradient.addColorStop(0.7, '#34495e');
             gradient.addColorStop(1, '#2c3e50');
-            
-            // Draw ellipsoid base
-            ctx.beginPath();
-            ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
-            ctx.fillStyle = gradient;
-            ctx.fill();
-            
-            // Add highlight
-            ctx.beginPath();
-            ctx.ellipse(
-                centerX - radiusX * 0.2, 
-                centerY - radiusY * 0.2, 
-                radiusX * 0.7, 
-                radiusY * 0.5, 
-                Math.PI / 4, 
-                0, 
-                Math.PI * 2
-            );
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.fill();
-            
-            // Draw border
-            ctx.beginPath();
-            ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
-            ctx.strokeStyle = '#4a6279';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            
-            // Draw active touch point if exists
+            touchCtx.beginPath();
+            touchCtx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+            touchCtx.fillStyle = gradient;
+            touchCtx.fill();
+            touchCtx.beginPath();
+            touchCtx.ellipse(centerX - radiusX * 0.2, centerY - radiusY * 0.2, radiusX * 0.7, radiusY * 0.5, Math.PI / 4, 0, Math.PI * 2);
+            touchCtx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            touchCtx.fill();
+            touchCtx.beginPath();
+            touchCtx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+            touchCtx.strokeStyle = '#4a6279';
+            touchCtx.lineWidth = 2;
+            touchCtx.stroke();
             if (activePoint) {
-                drawTouchPoint(activePoint.x, activePoint.y, activePoint.pressure);
+                drawTouchPoint(activePoint.x, activePoint.y, forceToDraw); 
             }
-            
-            // Update force bar
-            updateForceBar();
+            // console.log("Actual drawEllipsoid executed"); // Optional debug
         }
         
-        // Draw individual touch point
+        // Define ACTUAL force bar update function, overwriting stub
+        window.updateForceBar = function(currentForce = 0) { 
+            const forceBar = document.querySelector('.force-level');
+            if (forceBar) {
+                 const forceToDraw = typeof currentForce === 'number' && !isNaN(currentForce) ? currentForce : 0;
+                // console.log(`updateForceBar: Setting height to ${forceToDraw * 100}%`); // Log 8
+                forceBar.style.height = `${forceToDraw * 100}%`;
+            }
+             // console.log("Actual updateForceBar executed"); // Optional debug
+        }
+
+        // Define drawTouchPoint locally
         function drawTouchPoint(x, y, pressure) {
+            if (!touchCtx) return;
             const radius = Math.max(5, pressure * 15);
-            
-            // Glow effect
-            ctx.beginPath();
-            const glowGradient = ctx.createRadialGradient(
-                x, y, radius * 0.5,
-                x, y, radius * 2
-            );
+            const glowGradient = touchCtx.createRadialGradient(x, y, radius * 0.5, x, y, radius * 2);
             glowGradient.addColorStop(0, 'rgba(52, 152, 219, 0.8)');
             glowGradient.addColorStop(1, 'rgba(52, 152, 219, 0)');
-            
-            ctx.fillStyle = glowGradient;
-            ctx.arc(x, y, radius * 2, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Main touch point
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(52, 152, 219, 0.7)';
-            ctx.fill();
-            
-            // Touch point highlight
-            ctx.beginPath();
-            ctx.arc(x - radius * 0.3, y - radius * 0.3, radius * 0.4, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.fill();
+            touchCtx.fillStyle = glowGradient;
+            touchCtx.beginPath();
+            touchCtx.arc(x, y, radius * 2, 0, Math.PI * 2);
+            touchCtx.fill();
+            touchCtx.fillStyle = 'rgba(52, 152, 219, 0.7)';
+            touchCtx.beginPath();
+            touchCtx.arc(x, y, radius, 0, Math.PI * 2);
+            touchCtx.fill();
+            touchCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            touchCtx.beginPath();
+            touchCtx.arc(x - radius * 0.3, y - radius * 0.3, radius * 0.4, 0, Math.PI * 2);
+            touchCtx.fill();
         }
         
-        // Check if a point is within an ellipse
+        // Define isPointInEllipse locally
         function isPointInEllipse(x, y, ellipseX, ellipseY, radiusX, radiusY) {
             return (Math.pow(x - ellipseX, 2) / Math.pow(radiusX, 2) + 
                    Math.pow(y - ellipseY, 2) / Math.pow(radiusY, 2)) <= 1;
         }
-        
-        // Update force based on spacebar hold time
-        function updateForce() {
-            if (spacebarPressed) {
-                const currentTime = Date.now();
-                const holdTime = currentTime - spacebarHoldStartTime;
                 
-                // Calculate force based on hold time (0 to 1)
-                currentForce = Math.min(1, holdTime / MAX_FORCE_TIME);
-                
-                // Update visuals
-                updateForceBar();
-                drawEllipsoid();
-            }
-        }
-        
-        // Update the force bar visualization
-        function updateForceBar() {
-            const forceBar = document.querySelector('.force-level');
-            if (forceBar) {
-                forceBar.style.height = `${currentForce * 100}%`;
-            }
-        }
-        
-        // Add event listener for spacebar
-        document.addEventListener('keydown', function(e) {
-            if (e.code === 'Space' && !spacebarPressed) {
-                spacebarPressed = true;
-                spacebarHoldStartTime = Date.now();
-                
-                // Start updating force
-                forceUpdateInterval = setInterval(updateForce, 50);
-                
-                // Update visual indication
-                const spacebarIndicator = document.createElement('div');
-                spacebarIndicator.className = 'spacebar-indicator';
-                spacebarIndicator.textContent = 'SPACEBAR PRESSED';
-                document.body.appendChild(spacebarIndicator);
-                
-                e.preventDefault();
-            }
-        });
-        
-        document.addEventListener('keyup', function(e) {
-            if (e.code === 'Space') {
-                spacebarPressed = false;
-                clearInterval(forceUpdateInterval);
-                
-                // Reset force to zero
-                currentForce = 0;
-                updateForceBar();
-                
-                // Remove visual indication
-                const indicator = document.querySelector('.spacebar-indicator');
-                if (indicator) {
-                    indicator.remove();
-                }
-                
-                // Redraw to update canvas
-                drawEllipsoid();
-                
-                e.preventDefault();
-            }
-        });
-        
-        // Canvas click to show temporary touch point
+        // Add canvas-specific listeners
         touchCanvas.addEventListener('click', function(e) {
             const rect = touchCanvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            
             const centerX = touchCanvas.width / 2;
             const centerY = touchCanvas.height / 2;
             const radiusX = touchCanvas.width / 2 - 30;
             const radiusY = touchCanvas.height / 2 - 40;
-            
-            // Check if click is within ellipse
             if (isPointInEllipse(x, y, centerX, centerY, radiusX, radiusY)) {
-                // Set the active touch point with current force level
-                activePoint = {
-                    x: x,
-                    y: y,
-                    pressure: currentForce
-                };
-                
-                // Redraw to show the touch point
-                drawEllipsoid();
-                
-                // Optional: Hide the point after a short delay (1 second)
+                activePoint = { x: x, y: y };
+                window.drawEllipsoid(inputManager.currentForce); 
                 setTimeout(() => {
                     activePoint = null;
-                    drawEllipsoid();
+                    window.drawEllipsoid(inputManager.currentForce);
                 }, 1000);
             }
         });
-        
-        // Clear touch points on right click
         touchCanvas.addEventListener('contextmenu', function(e) {
             e.preventDefault();
             activePoint = null;
-            drawEllipsoid();
+            window.drawEllipsoid(inputManager.currentForce);
         });
         
-        // Initial draw
-        drawEllipsoid();
-    }
-    
-    // Chart placeholder for measurement tab
-    const forceChart = document.getElementById('forceChart');
-    
-    // Define drawChart in the global scope
-    window.drawChart = function() {
-        if (!forceChart) return;
-        
-        const ctx = forceChart.getContext('2d');
-        const width = forceChart.width;
-        const height = forceChart.height;
-        
-        ctx.clearRect(0, 0, width, height);
-        
-        // Draw axes
-        ctx.beginPath();
-        ctx.moveTo(50, 30);
-        ctx.lineTo(50, height - 30);
-        ctx.lineTo(width - 30, height - 30);
-        ctx.strokeStyle = '#7f8c8d';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        // Draw axes labels
-        ctx.fillStyle = '#7f8c8d';
-        ctx.font = '12px Arial';
-        ctx.fillText('Time (s)', width / 2, height - 10);
-        
-        // Rotate text for y-axis
-        ctx.save();
-        ctx.translate(15, height / 2);
-        ctx.rotate(-Math.PI / 2);
-        ctx.fillText('Force (N)', 0, 0);
-        ctx.restore();
-        
-        // Generate sample data
-        const dataPoints = 20;
-        const dataX = [];
-        const dataY = [];
-        
-        for (let i = 0; i < dataPoints; i++) {
-            dataX.push(i);
-            dataY.push(Math.sin(i * 0.5) * 2 + Math.random() * 0.5 + 3); // Generate wavy data
-        }
-        
-        // Draw data line
-        ctx.beginPath();
-        ctx.moveTo(50, height - 30 - (dataY[0] / 5 * (height - 60)));
-        
-        for (let i = 1; i < dataPoints; i++) {
-            const x = 50 + (i / (dataPoints - 1)) * (width - 80);
-            const y = height - 30 - (dataY[i] / 5 * (height - 60));
-            ctx.lineTo(x, y);
-        }
-        
-        ctx.strokeStyle = '#3498db';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        
-        // Fill area under the line
-        ctx.lineTo(50 + ((dataPoints - 1) / (dataPoints - 1)) * (width - 80), height - 30);
-        ctx.lineTo(50, height - 30);
-        ctx.fillStyle = 'rgba(52, 152, 219, 0.2)';
-        ctx.fill();
-    };
-    
-    // Initialize chart when document loads
-    if (forceChart) {
-        // Draw the chart initially
-        window.drawChart();
-        
-        // Update chart when measurement button is clicked
-        const measureBtn = document.querySelector('.measure-btn');
-        if (measureBtn) {
-            measureBtn.addEventListener('click', function() {
-                if (this.textContent === 'Start Measurement') {
-                    this.textContent = 'Stop Measurement';
-                    this.style.backgroundColor = '#e74c3c';
-                } else {
-                    this.textContent = 'Start Measurement';
-                    this.style.backgroundColor = '#3498db';
-                    window.drawChart(); // Redraw chart with new random data
-                    
-                    // Update metrics
-                    document.querySelectorAll('.metric-value')[0].textContent = (Math.random() * 3 + 5).toFixed(1) + ' N';
-                    document.querySelectorAll('.metric-value')[1].textContent = (Math.random() * 2 + 3).toFixed(1) + ' N';
-                }
-            });
-        }
+        // Initial draw using the now-defined functions
+        window.drawEllipsoid(0);
+        window.updateForceBar(0);
+
+    } else {
+         console.warn("Touch canvas element (#touchCanvas) not found. Side panel drawing disabled.");
     }
 
-    // Modify Flappy Bird game integration
-    const playFlappyBtn = document.getElementById('playFlappyBird');
-    if (playFlappyBtn) {
-        playFlappyBtn.addEventListener('click', function() {
-            const gameContainer = document.getElementById('flappyBirdGame');
-            if (gameContainer) {
-                gameContainer.style.display = 'flex';
-                
-                // Set up force control for the game
-                inputManager.setGameControlCallback((force) => {
-                    // Trigger a "jump" event when force exceeds threshold
-                    const jumpEvent = new KeyboardEvent('keydown', {
-                        key: ' ',
-                        code: 'Space',
-                        keyCode: 32,
-                        which: 32,
-                        bubbles: true
-                    });
-                    document.dispatchEvent(jumpEvent);
-                    
-                    // Release after a short delay
-                    setTimeout(() => {
-                        const releaseEvent = new KeyboardEvent('keyup', {
-                            key: ' ',
-                            code: 'Space',
-                            keyCode: 32,
-                            which: 32,
-                            bubbles: true
-                        });
-                        document.dispatchEvent(releaseEvent);
-                    }, 100);
-                });
-            }
-        });
-    }
-
-    // Handle game close and cleanup
-    const closeGameBtn = document.getElementById('closeFlappyBird');
-    if (closeGameBtn) {
-        closeGameBtn.addEventListener('click', function() {
-            const gameContainer = document.getElementById('flappyBirdGame');
-            if (gameContainer) {
-                gameContainer.style.display = 'none';
-                // Remove game control callback when game is closed
-                inputManager.setGameControlCallback(null);
-            }
-        });
-    }
-
-    // Add debug tab functionality
-    const debugTab = document.getElementById('debug');
-    const connectBtn = debugTab ? debugTab.querySelector('.connect-btn') : null;
-    const debugStatusIndicator = debugTab ? debugTab.querySelector('.debug-status-indicator') : null;
-    const startLogBtn = debugTab ? debugTab.querySelector('.start-log') : null;
-    const clearLogBtn = debugTab ? debugTab.querySelector('.clear-log') : null;
-    const arduinoLog = debugTab ? document.getElementById('arduinoLog') : null;
-    const pressureValue = debugTab ? document.getElementById('pressureValue') : null;
-    const rawValue = debugTab ? document.getElementById('rawValue') : null;
-    const lastUpdate = debugTab ? document.getElementById('lastUpdate') : null;
-    
-    let isLogging = false;
-    let loggedDataCount = 0;
-    const MAX_LOG_ENTRIES = 100;
-    
-    // Function to initialize the debug tab
-    function initializeDebugTab() {
-        const debugTabContent = document.getElementById('debugContent');
-        if (!debugTabContent) {
-            return;
-        }
-
-        // Initialize Arduino log
-        const arduinoLog = document.getElementById('arduinoLog');
-        if (arduinoLog) {
-            const now = new Date().toLocaleTimeString();
-            if (arduinoLog.textContent === 'No data received yet...' || arduinoLog.textContent === '') {
-                arduinoLog.textContent = 
-                    `[${now}] Debug tab initialized\n` +
-                    `[${now}] Web Serial API ${('serial' in navigator) ? 'is supported' : 'is NOT supported'} in this browser\n` +
-                    `[${now}] Ready for connection to Arduino device\n`;
-            }
-        }
-
-        // Initialize connection controls - Query from document using new parent ID
-        const connectBtn = document.querySelector('#debugContent .connect-btn');
-        const simulationToggle = document.querySelector('#debugContent .simulation-toggle');
-        const statusIndicator = document.querySelector('#debugContent .debug-status-indicator');
-
-        if (connectBtn && statusIndicator) {
-            const newConnectBtn = connectBtn.cloneNode(true);
-            connectBtn.parentNode.replaceChild(newConnectBtn, connectBtn);
-            
-            newConnectBtn.addEventListener('click', async () => {
-                if (newConnectBtn.textContent === 'Connect to Arduino') {
-                    try {
-                        // Try to connect to Arduino
-                        const now = new Date().toLocaleTimeString();
-                        if ('serial' in navigator) {
-                            // Request port and try to connect
-                            const port = await navigator.serial.requestPort();
-                            await port.open({ baudRate: 9600 });
-                            
-                            // Update UI to show connected state
-                            statusIndicator.textContent = 'Connected';
-                            statusIndicator.classList.remove('disconnected');
-                            statusIndicator.classList.add('connected');
-                            newConnectBtn.textContent = 'Disconnect';
-                            
-                            // Log success
-                            if (arduinoLog) {
-                                arduinoLog.textContent += `[${now}] Successfully connected to Arduino device\n`;
-                            }
-                        } else {
-                            // Web Serial API not supported
-                            if (arduinoLog) {
-                                arduinoLog.textContent += `[${now}] Web Serial API not supported in this browser\n`;
-                            }
-                        }
-                    } catch (error) {
-                        // Log error
-                        const now = new Date().toLocaleTimeString();
-                        if (arduinoLog) {
-                            arduinoLog.textContent += `[${now}] Error connecting to Arduino: ${error.message}\n`;
-                        }
-                    }
-                } else {
-                    // Disconnect logic
-                    const now = new Date().toLocaleTimeString();
-                    statusIndicator.textContent = 'Disconnected';
-                    statusIndicator.classList.remove('connected');
-                    statusIndicator.classList.add('disconnected');
-                    newConnectBtn.textContent = 'Connect to Arduino';
-                    if (arduinoLog) {
-                        arduinoLog.textContent += `[${now}] Disconnected from Arduino device\n`;
-                    }
-                }
-            });
-        }
-
-        if (simulationToggle) {
-            const newSimToggle = simulationToggle.cloneNode(true);
-            simulationToggle.parentNode.replaceChild(newSimToggle, simulationToggle);
-            
-            newSimToggle.addEventListener('click', () => {
-                const now = new Date().toLocaleTimeString();
-                const isSimulationActive = newSimToggle.classList.toggle('active');
-                newSimToggle.textContent = isSimulationActive ? 'Using Simulation' : 'Use Simulation';
-                
-                if (arduinoLog) {
-                    arduinoLog.textContent += `[${now}] ${isSimulationActive ? 'Enabled' : 'Disabled'} simulation mode\n`;
-                }
-                
-                // Start simulation updates if active
-                if (isSimulationActive) {
-                    startSimulationUpdates();
-                }
-            });
-        }
-
-        // Initialize logging controls - Query from document using new parent ID
-        const startLogBtn = document.querySelector('#debugContent .start-log');
-        const clearLogBtn = document.querySelector('#debugContent .clear-log');
-
-        if (startLogBtn) {
-            const newStartLogBtn = startLogBtn.cloneNode(true);
-            startLogBtn.parentNode.replaceChild(newStartLogBtn, startLogBtn);
-            
-            newStartLogBtn.addEventListener('click', () => {
-                const isLogging = newStartLogBtn.classList.toggle('active');
-                newStartLogBtn.textContent = isLogging ? 'Stop Logging' : 'Start Logging';
-                const now = new Date().toLocaleTimeString();
-                if (arduinoLog) {
-                    arduinoLog.textContent += `[${now}] ${isLogging ? 'Started' : 'Stopped'} data logging\n`;
-                }
-            });
-        }
-
-        if (clearLogBtn) {
-            const newClearLogBtn = clearLogBtn.cloneNode(true);
-            clearLogBtn.parentNode.replaceChild(newClearLogBtn, clearLogBtn);
-            
-            newClearLogBtn.addEventListener('click', () => {
-                if (arduinoLog) {
-                    const now = new Date().toLocaleTimeString();
-                    arduinoLog.textContent = `[${now}] Log cleared\n`;
-                }
-            });
-        }
-
-        // Start simulation updates for sensor values
-        startSimulationUpdates();
-    }
-
-    // Function to start simulation updates
-    function startSimulationUpdates() {
-        const pressureValue = document.getElementById('pressureValue');
-        const rawValue = document.getElementById('rawValue');
-        const lastUpdate = document.getElementById('lastUpdate');
-        
-        // Create new simulation interval (clear old one if exists)
-        if (window.simulationInterval) {
-            clearInterval(window.simulationInterval);
-        }
-        
-        window.simulationInterval = setInterval(() => {
-            const simulationToggle = document.querySelector('.simulation-toggle');
-            if (simulationToggle && simulationToggle.classList.contains('active')) {
-                const now = new Date().toLocaleTimeString();
-                if (pressureValue) pressureValue.textContent = (Math.random() * 10).toFixed(2);
-                if (rawValue) rawValue.textContent = Math.floor(Math.random() * 1024);
-                if (lastUpdate) lastUpdate.textContent = now;
-            }
-        }, 1000);
-    }
-
-    // Call initializeDebugTab on DOMContentLoaded to set up everything properly
-    document.addEventListener('DOMContentLoaded', () => {
-        // Get all tab buttons and content
-        tabButtons = document.querySelectorAll('.tab-btn');
-        tabContents = document.querySelectorAll('.tab-content');
-        
-        // Add click event to tab buttons
-        tabButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                const tabId = button.getAttribute('data-tab');
-                switchTab(tabId);
-            });
-        });
-
-        // Initialize first tab or debug tab if specified in URL
-        const hashTab = window.location.hash.slice(1);
-        if (hashTab && document.getElementById(hashTab)) {
-            switchTab(hashTab);
-        } else {
-            // Default to first tab
-            const firstTab = tabButtons[0];
-            if (firstTab) {
-                switchTab(firstTab.getAttribute('data-tab'));
-            }
-        }
+    // --- Add the EVT_FORCE_UPDATE listener for visualization AFTER functions are defined ---
+    document.addEventListener(EVT_FORCE_UPDATE, (event) => {
+         // console.log(`Visualization Listener: Received ${EVT_FORCE_UPDATE}`); // Log 6
+         const { force } = event.detail;
+         // Call the globally defined functions (stubs or real ones)
+         // console.log(`Visualization Listener: Calling updateForceBar with force: ${force.toFixed(3)}`); // Log 7
+         window.updateForceBar(force);
+         // console.log(`Visualization Listener: Calling drawEllipsoid with force: ${force.toFixed(3)}`);
+         window.drawEllipsoid(force);
     });
-}); 
+
+    // --- Flappy Bird Game Integration (Event Listener Based) ---
+    const playFlappyBtn = document.getElementById('playFlappyBird');
+    const closeGameBtn = document.getElementById('closeFlappyBird');
+    const gameContainer = document.getElementById('flappyBirdGame');
+    let gameSpacebarTimeout = null; 
+    let isGameControlActive = false; // Flag to enable/disable game control
+
+    // Function to trigger the jump (simulated spacebar press)
+    function triggerFlappyJump() {
+         if (gameSpacebarTimeout === null && gameContainer.style.display === 'flex') { 
+             console.log(`Flappy Bird Jump Triggered`); // Log without force here
+             const jumpEvent = new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true });
+             document.dispatchEvent(jumpEvent); 
+             
+             gameSpacebarTimeout = setTimeout(() => {
+                 const releaseEvent = new KeyboardEvent('keyup', { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true });
+                 document.dispatchEvent(releaseEvent);
+                 gameSpacebarTimeout = null; 
+             }, 100); 
+         }
+    }
+    
+    // Listen for force updates IF game control is active
+    document.addEventListener(EVT_FORCE_UPDATE, (event) => {
+         // console.log(`Measurement Listener: Received ${EVT_FORCE_UPDATE}. isMeasuring: ${isMeasuring}`); // Log 3
+         if (!isMeasuring) return; 
+         const { force } = event.detail;
+         // console.log(`Measurement Listener: Calling recordMeasurement with force: ${force.toFixed(3)}`); // Log 4
+         recordMeasurement(force); 
+    });
+
+    // Play Button Setup
+    if (playFlappyBtn && gameContainer) {
+        playFlappyBtn.addEventListener('click', function() {
+            gameContainer.style.display = 'flex'; 
+            isGameControlActive = true; // Enable force control for the game
+            console.log("Flappy Bird control ACTIVATED");
+             // if(typeof window.resetGame === 'function') window.resetGame();
+        });
+    }
+
+    // Close Button Setup
+    if (closeGameBtn && gameContainer) {
+        closeGameBtn.addEventListener('click', function() {
+            gameContainer.style.display = 'none'; 
+            isGameControlActive = false; // Disable force control
+            console.log("Flappy Bird control DEACTIVATED");
+            // Clear any pending key release timeout
+            if (gameSpacebarTimeout) {
+                clearTimeout(gameSpacebarTimeout);
+                gameSpacebarTimeout = null;
+                 const releaseEvent = new KeyboardEvent('keyup', { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true });
+                 document.dispatchEvent(releaseEvent); // Ensure key is released
+            }
+             // if(typeof window.stopGame === 'function') window.stopGame();
+        });
+    }
+
+    // Debug Tab Initialization (Modify button handlers)
+    function initializeDebugTab() {
+        console.log("Initializing Debug Tab listeners...");
+         // Only query if not already done
+         if (!debugElements.connectBtn) {
+             debugElements.connectBtn = document.querySelector('#debugContent .connect-btn');
+             debugElements.simulationToggle = document.querySelector('#debugContent .simulation-toggle');
+             debugElements.startLogBtn = document.querySelector('#debugContent .start-log');
+             debugElements.clearLogBtn = document.querySelector('#debugContent .clear-log');
+         }
+         
+         // --- Attach Listeners using cloneNode trick --- 
+         const attachListener = (element, event, handler) => {
+             if (!element) return null;
+             const newElement = element.cloneNode(true);
+             element.parentNode.replaceChild(newElement, element);
+             newElement.addEventListener(event, handler);
+             return newElement; // Return the new element with the listener
+         };
+
+        // Re-attach listeners to new clones
+         debugElements.connectBtn = attachListener(debugElements.connectBtn, 'click', async () => {
+             // Connect/disconnect ONLY works in Arduino mode
+             if (inputManager.currentMode === 'arduino') {
+                 if (!inputManager.arduino.isConnected) {
+                      console.log("Debug Connect Btn: Attempting connect...");
+                     await inputManager.arduino.connect(); 
+                 } else {
+                     console.log("Debug Connect Btn: Attempting disconnect...");
+                     await inputManager.arduino.disconnect();
+                 }
+             }
+         });
+
+        debugElements.simulationToggle = attachListener(debugElements.simulationToggle, 'click', async () => {
+             const isCurrentlySimulation = debugElements.simulationToggle.classList.contains('active');
+             const targetMode = isCurrentlySimulation ? 'arduino' : 'simulation';
+             await inputManager.switchMode(targetMode); // switchMode dispatches EVT_MODE_CHANGED
+         });
+
+         debugElements.startLogBtn = attachListener(debugElements.startLogBtn, 'click', () => {
+             const isLogging = debugElements.startLogBtn.classList.toggle('active');
+             debugElements.startLogBtn.textContent = isLogging ? 'Stop Logging' : 'Start Logging';
+             // Simulator reads this class directly
+             console.log(`Logging ${isLogging ? 'started' : 'stopped'}`);
+         });
+
+         debugElements.clearLogBtn = attachListener(debugElements.clearLogBtn, 'click', () => {
+             const arduinoLog = document.getElementById('arduinoLog');
+             if (arduinoLog) {
+                 const now = new Date().toLocaleTimeString();
+                 arduinoLog.textContent = `[${now}] Log cleared\n`;
+                 console.log("Log cleared.");
+             }
+         });
+         
+         // Trigger initial UI update based on current state
+          document.dispatchEvent(new CustomEvent(EVT_MODE_CHANGED, { detail: { mode: inputManager.currentMode, isConnected: inputManager.arduino.isConnected } }));
+    }
+    
+    // --- Initial Setup --- 
+    // Load Chart.js
+    if (typeof Chart === 'undefined') {
+        const chartScript = document.createElement('script');
+        chartScript.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+        chartScript.onload = () => { 
+             console.log("Chart.js loaded."); 
+             if (forceChartCanvas) initializeChart(); // Initialize chart after loading
+        };
+         chartScript.onerror = () => { 
+             console.error("Failed to load Chart.js"); 
+             window.Chart = class Chart { constructor(){} update(){} destroy(){} }; // Dummy Chart
+             if (forceChartCanvas) initializeChart(); // Still call init
+         };
+        document.head.appendChild(chartScript);
+    } else {
+         if (forceChartCanvas) initializeChart();
+    }
+    
+    // Initialize Debug tab if it's the default active tab
+     const initialActiveTab = document.querySelector('.tab-btn.active');
+     if (initialActiveTab && initialActiveTab.getAttribute('data-tab') === 'debug') {
+         initializeDebugTab();
+     }
+    
+    console.log("DOM fully loaded and script executed.");
+
+}); // End DOMContentLoaded 

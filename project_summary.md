@@ -4,56 +4,70 @@
 This project aims to develop a medical rehabilitation device using soft robotics for stroke patients with decreased hand-arm dexterity. The system consists of a silicone membrane hardware component and a user interface software component to enable gamified rehabilitation exercises and progress tracking.
 
 ## Problem Statement
-Stroke affects approximately 17 million people annually, with 75% experiencing long-term decreased hand-arm dexterity. Current rehabilitation is limited by therapist availability and existing robotic devices are complex with overabundant functionalities. This project aims to create a simpler, more effective tool that:
+Stroke affects approximately 17 million people annually, with 75% experiencing long-term decreased hand-arm dexterity. Current rehabilitation is limited by therapist availability and existing robotic devices are complex. This project aims to create a simpler, more effective tool that:
 1. Helps therapists measure rehabilitation progress
 2. Enables patients to practice hand movements through gamified exercises
 
-## Hardware Component
-- **Silicone membrane/dome** that can be pressurized to mimic stiffness of different objects
-- Utilizes pressure sensors to measure force applied by patients
-- Capable of detecting touch points/areas on the membrane
-- Designed for ergonomic comfort during extended rehabilitation sessions
+## Hardware Component (Planned)
+- Silicone membrane/dome that can be pressurized
+- Pressure sensors to measure force
+- Capable of detecting touch points/areas (planned)
 
-## Technical Implementation
+## Technical Implementation (Software - Current Status)
 
 ### Hardware-Software Integration
-- **Arduino-based communication** for force sensor data acquisition
-- **Web Serial API** provides direct connection between hardware and browser interface
-- **Dual-mode system** with seamless switching between:
-  - Arduino mode: Hardware force sensor readings
-  - Simulation mode: Spacebar-based force input simulation
-- **Browser compatibility** management with appropriate fallbacks
-- **Real-time data transmission** with minimal latency
+- **Communication Method**: Web Serial API (via `window._realNavigatorSerial`) or built-in JavaScript Simulator (`window.serialSimulatorInstance`).
+- **Architecture**: Event-driven communication using Custom Events (`forceupdate`, `modechanged`, `sim-control`, etc.).
+- **State Management**: `InputModeManager` class manages `arduino`/`simulation` mode.
+- **Connection Handling**: `ArduinoConnection` class manages connection to real device or simulator.
+- **Simulator Control**: Spacebar triggers `sim-control` events to manipulate simulator output.
+- **Browser Compatibility**: Web Serial API primarily for Chrome/Edge; Simulator works cross-browser.
 
-### Force Measurement System
-- Analog force sensors connected to Arduino analog pins
-- Signal sampling at appropriate rate to balance responsiveness and stability
-- Raw sensor values (0-1023) normalized to usable range (0-1)
-- Value processing pipeline with noise filtering and smoothing
+### Force Measurement System (Software)
+- Accepts raw pressure data from source (real/simulated).
+- Normalizes pressure to 0-1 range.
+- Dispatches `forceupdate` event with normalized and raw values.
+- Measurement tab records normalized force over time, calculates max/avg, displays chart (Chart.js).
 
-### Communication Protocol
-- Serial communication at 9600 baud rate
-- Simple text-based protocol with one value per line
-- Error detection and connection status monitoring
-- Auto-reconnection capabilities with graceful fallbacks
+### Communication Protocol (Assumed)
+- Serial communication at 9600 baud rate.
+- Assumes simple text-based protocol (one pressure value per line).
 
 ### Game Control Integration
-- Force signals mapped directly to game input controls
-- Configurable force thresholds for game action triggering
-- Identical behavior between hardware and simulation modes
-- Variable response based on applied force intensity
+- Flappy Bird game integrated.
+- Listens for `forceupdate` event.
+- Triggers jump when normalized force exceeds threshold.
 
-## User Interface Requirements
+## User Interface Requirements (Implemented Features)
+- **Main UI**: Two-panel layout (Hardware Control, Main Content) with tabs (Exercises, Measurement, Debug).
+- **Hardware Panel**: Device status, Force Bar, Ellipsoid visualization (clickable points).
+- **Exercises Tab**: Flappy Bird game card and launch overlay.
+- **Measurement Tab**: Start/Stop, Metrics display, Chart, Save (to console).
+- **Debug Tab**: Mode switching, Connect/Disconnect (Arduino mode), Live values, Log display.
 
-### Patient Interface
-- **Gamified Exercises**: Simple games like Flappy Bird, Golf, or music applications
-- **Visual Feedback**: Shows pressure applied and progress
-- **Customization**: Adjustable difficulty levels for different rehabilitation stages
+## Development Status & Next Steps
 
-### Therapist Interface
-- **Patient Management**: Create profiles and customize rehabilitation programs
-- **Progress Tracking**: View force data and touch accuracy
-- **Assessment Tools**: Generate reports and view historical data
+### Current Status (Based on Code)
+- ✅ Core UI structure and styling.
+- ✅ Event-driven communication implemented.
+- ✅ Dual-mode system (Simulation/Arduino via explicit source selection).
+- ✅ Simulator controlled by spacebar via events.
+- ✅ Force normalization and dispatching.
+- ✅ Debug Tab fully functional.
+- ✅ Measurement Tab functional (charting, metrics, console save).
+- ✅ Side Panel Visualization functional.
+- ✅ Flappy Bird game integrated and controlled by force events.
+
+### Next Steps
+- Connect and test with physical Arduino hardware.
+- Implement Settings slider functionality.
+- Implement additional games.
+- Develop Therapist Interface.
+- Implement persistent data storage.
+
+## Technical Challenges
+- Hardware: Membrane fabrication, multi-touch detection.
+- Software: Ensuring robust real-device connection/communication, implementing remaining features.
 
 ## Development Timeline
 
@@ -69,11 +83,4 @@ Stroke affects approximately 17 million people annually, with 75% experiencing l
 - Additional games implementation
 - Therapist interface development
 - User testing and iterative refinement
-- Data collection and analysis features
-
-## Technical Challenges
-1. Ergonomic design that accommodates different hand sizes
-2. ✅ Accurate force measurement implementation
-3. Touch point recognition, especially for multi-touch scenarios
-4. ✅ Software integration with the physical device
-5. Creating engaging yet therapeutic games 
+- Data collection and analysis features 

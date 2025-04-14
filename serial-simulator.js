@@ -1,175 +1,152 @@
-// Simulated Serial Connection
+// Define the class FIRST
 class SimulatedSerialPort {
     constructor() {
         this.isOpen = false;
-        this.onDataCallback = null;
         this.simulationInterval = null;
-        this.noiseAmount = 0.1; // Amount of random noise to add
-        this.baseValue = 0; // Base value for the sine wave
-        this.time = 0; // Time counter for sine wave
+        this.latestValue = null;
+        this.basePressure = 101300; // Pa
+        this.pressureRange = 1000;  // Pa (Max pressure offset from base)
+        this.noiseMagnitude = 50;   // Pa 
+        this.isIncreasingForce = false; // Flag controlled by events
+        this.forceIncreaseStartTime = 0;
+        this.currentSimulatedForce = 0; // Current force level (0-1)
+        this.MAX_FORCE_TIME = 3000; // ms to reach max force
+
+        // Listen for control events from script.js
+        document.addEventListener('sim-control', this.handleSimControl.bind(this));
     }
 
-    // Simulate port opening
     async open(options) {
         console.log('Opening simulated serial port with options:', options);
+        if (this.isOpen) {
+            console.log("Simulator port already open.");
+            return Promise.resolve();
+        }
         this.isOpen = true;
-        this.startSimulation();
+        this.startSimulation(); // Start the interval timer
         return Promise.resolve();
     }
 
-    // Simulate port closing
     async close() {
         console.log('Closing simulated serial port');
+        if (!this.isOpen) {
+             console.log("Simulator port already closed.");
+             return Promise.resolve();
+        }
         this.isOpen = false;
         if (this.simulationInterval) {
             clearInterval(this.simulationInterval);
+            this.simulationInterval = null; 
         }
+        this.latestValue = null; 
+        this.isIncreasingForce = false; // Reset state on close
+        this.currentSimulatedForce = 0;
         return Promise.resolve();
     }
 
-    // Start generating simulated data
+    // Event handler for simulator control
+    handleSimControl(event) {
+        const { action, duration } = event.detail;
+        // console.log(`Simulator received control event:`, event.detail);
+        if (action === 'start') {
+             if (!this.isIncreasingForce) {
+                this.isIncreasingForce = true;
+                this.forceIncreaseStartTime = Date.now();
+            }
+        } else if (action === 'stop') {
+            this.isIncreasingForce = false;
+            // Optional: use duration for immediate force setting? Currently ignored.
+        }
+    }
+
     startSimulation() {
+        if (this.simulationInterval) {
+            clearInterval(this.simulationInterval);
+        }
         this.simulationInterval = setInterval(() => {
-            if (this.isOpen && this.readable && this.readable.onDataCallback) {
-                // Generate a value between 0 and 1023 (Arduino analog range)
-                // Using a sine wave with some noise for more realistic data
-                this.time += 0.1;
-                const sineValue = Math.sin(this.time) * 0.5 + 0.5; // Sine wave between 0 and 1
-                const noise = (Math.random() - 0.5) * this.noiseAmount;
-                const value = Math.floor((sineValue + noise) * 1023);
-                
-                // Ensure value stays within Arduino's analog range
-                const clampedValue = Math.max(0, Math.min(1023, value));
-                
-                // Create a simulated data packet
-                const data = new TextEncoder().encode(clampedValue.toString() + '\n');
-                this.readable.onDataCallback({ value: data, done: false });
-                
-                // Update debug tab sensor values directly
-                const pressureValue = document.getElementById('pressureValue');
-                const rawValue = document.getElementById('rawValue');
-                const lastUpdate = document.getElementById('lastUpdate');
-                
-                if (pressureValue) pressureValue.textContent = (clampedValue / 1023 * 10).toFixed(2);
-                if (rawValue) rawValue.textContent = clampedValue;
-                if (lastUpdate) lastUpdate.textContent = new Date().toLocaleTimeString();
-                
-                // Add to log if logging is enabled
-                const startLogBtn = document.querySelector('.start-log');
-                const arduinoLog = document.getElementById('arduinoLog');
-                
-                if (startLogBtn && startLogBtn.classList.contains('active') && arduinoLog) {
-                    const timestamp = new Date().toLocaleTimeString();
-                    arduinoLog.textContent += `[${timestamp}] Pressure: ${(clampedValue / 1023 * 10).toFixed(2)}, Raw: ${clampedValue}\n`;
-                    
-                    // Keep log size manageable
-                    const maxLogLines = 100;
-                    const lines = arduinoLog.textContent.split('\n');
-                    if (lines.length > maxLogLines) {
-                        arduinoLog.textContent = lines.slice(-maxLogLines).join('\n');
-                    }
-                    
-                    // Auto-scroll to bottom
-                    arduinoLog.scrollTop = arduinoLog.scrollHeight;
+             if (!this.isOpen) { 
+                  clearInterval(this.simulationInterval);
+                  this.simulationInterval = null;
+                  return;
+             }
+            // Update force based on spacebar state (isIncreasingForce flag)
+            if (this.isIncreasingForce) {
+                const holdDuration = Date.now() - this.forceIncreaseStartTime;
+                this.currentSimulatedForce = Math.min(holdDuration / this.MAX_FORCE_TIME, 1);
+            } else {
+                if (this.currentSimulatedForce > 0) {
+                    this.currentSimulatedForce = Math.max(0, this.currentSimulatedForce - 0.05); 
                 }
             }
-        }, 100); // Send data every 100ms
+            const pressureOffset = this.currentSimulatedForce * this.pressureRange;
+            const noise = (Math.random() - 0.5) * this.noiseMagnitude;
+            const simulatedPressure = Math.max(this.basePressure, this.basePressure + pressureOffset + noise);
+            const dataString = simulatedPressure.toFixed(2) + '\n';
+            this.latestValue = new TextEncoder().encode(dataString);
+            
+            // Check if logging is enabled VIA the DOM element (as before)
+            // TODO: Ideally, the simulator shouldn't interact with DOM. 
+            // It could dispatch all data and let a listener decide whether to log.
+            const startLogBtn = document.querySelector('#debugContent .start-log.active'); 
+            if (startLogBtn) { 
+                // Dispatch log data instead of writing to DOM
+                const logDetail = {
+                    timestamp: new Date().toLocaleTimeString(),
+                    message: `Simulated Pressure: ${simulatedPressure.toFixed(2)} Pa (Force: ${this.currentSimulatedForce.toFixed(2)})`
+                };
+                document.dispatchEvent(new CustomEvent('logmessage', { detail: logDetail }));
+            }
+        }, 50); 
     }
 
     // Simulated readable stream
     get readable() {
+        const self = this; 
         return {
-            onDataCallback: this.onDataCallback,
             getReader: () => ({
                 read: async () => {
-                    // This will be replaced by the simulation interval
-                    return Promise.resolve({ value: new Uint8Array([]), done: false });
+                    // Wait until a value is available OR port closed
+                    while (self.latestValue === null && self.isOpen) {
+                        await new Promise(resolve => setTimeout(resolve, 20)); 
+                    }
+                    // If port closed while waiting, return done
+                    if (!self.isOpen) {
+                        return Promise.resolve({ value: undefined, done: true });
+                    }
+                    const valueToReturn = self.latestValue;
+                    // Clear latest value after reading to ensure reader waits for next value
+                    self.latestValue = null; 
+                    return Promise.resolve({ value: valueToReturn, done: false });
                 },
                 releaseLock: () => {},
-                cancel: async () => Promise.resolve()
+                cancel: async () => {
+                    console.log('Simulated reader cancelled');
+                    // Don't close the port on cancel, just stop reading
+                    return Promise.resolve();
+                }
             })
         };
     }
+     // Writable stream getter (placeholder, not used)
+     get writable() {
+         return null; // Or implement a dummy writable stream if needed later
+     }
 }
 
-// Simulated Serial API
-class SimulatedSerial {
-    constructor() {
-        this.port = new SimulatedSerialPort();
-    }
+// --- NOW create instances and check real API ---
 
-    async requestPort() {
-        console.log('Requesting simulated serial port');
-        return this.port;
-    }
-}
+// Store the real navigator.serial if it exists, otherwise null
+window._realNavigatorSerial = navigator.serial || null;
 
-// Replace the real Serial API with our simulated one if we're in simulation mode
-if (!navigator.serial) {
-    console.log('Web Serial API not available, using simulation');
-    navigator.serial = new SimulatedSerial();
-    
-    // Initialize simulation port
-    setTimeout(() => {
-        const simPort = new SimulatedSerialPort();
-        simPort.open({ baudRate: 9600 });
-    }, 500);
+// Always create the simulator port instance and store it globally
+window.serialSimulatorInstance = new SimulatedSerialPort();
+console.log("Created global serialSimulatorInstance.");
+if(window._realNavigatorSerial) {
+    console.log("Real Web Serial API detected and stored in window._realNavigatorSerial.");
 } else {
-    console.log('Web Serial API available, simulation available as fallback');
-    // Store the real Serial API
-    navigator._realSerial = navigator.serial;
-    
-    // Auto-initialize simulation for testing
-    navigator.serial = new SimulatedSerial();
-    setTimeout(() => {
-        const simPort = new SimulatedSerialPort();
-        simPort.open({ baudRate: 9600 });
-        
-        // Update UI to show simulation is active
-        const simulationToggle = document.querySelector('.simulation-toggle');
-        if (simulationToggle) {
-            simulationToggle.classList.add('active');
-            simulationToggle.textContent = 'Using Simulation';
-        }
-    }, 500);
-    
-    // Add method to switch between real and simulated
-    navigator.switchToSimulatedSerial = () => {
-        console.log('Switching to simulated serial');
-        navigator.serial = new SimulatedSerial();
-        
-        // Update simulation toggle if it exists
-        const simulationToggle = document.querySelector('.simulation-toggle');
-        if (simulationToggle) {
-            simulationToggle.classList.add('active');
-            simulationToggle.textContent = 'Using Simulation';
-        }
-        
-        // Auto-start simulation
-        setTimeout(() => {
-            const simPort = new SimulatedSerialPort();
-            simPort.open({ baudRate: 9600 });
-        }, 500);
-    };
-    
-    navigator.switchToRealSerial = () => {
-        console.log('Switching to real serial');
-        navigator.serial = navigator._realSerial;
-        
-        // Update simulation toggle if it exists
-        const simulationToggle = document.querySelector('.simulation-toggle');
-        if (simulationToggle) {
-            simulationToggle.classList.remove('active');
-            simulationToggle.textContent = 'Use Simulation';
-        }
-    };
-    
-    // Auto-switch to simulation for testing
-    setTimeout(() => {
-        // Only auto-switch if simulation toggle is used
-        const simulationToggle = document.querySelector('.simulation-toggle');
-        if (simulationToggle && simulationToggle.classList.contains('active')) {
-            navigator.switchToSimulatedSerial();
-        }
-    }, 1000);
-} 
+    console.log("Real Web Serial API not detected.");
+}
+
+// --- REMOVED SimulatedSerial class --- 
+// --- REMOVED navigator.serial replacement logic --- 
+// --- REMOVED switchTo... helper functions --- 

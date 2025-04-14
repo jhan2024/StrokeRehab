@@ -1,47 +1,102 @@
 # Hand Rehabilitation Device Interface
 
-A desktop interface designed for a soft robotics-based hand rehabilitation device for stroke patients.
+A web-based interface designed for a soft robotics-based hand rehabilitation device for stroke patients.
 
 ## Overview
 
-This mockup provides a visual representation of the interface for the hand rehabilitation device. It consists of two main panels:
-
-1. **Hardware Control Panel** (left side) - For connecting to the device, visualizing touch points, and adjusting hardware settings.
-2. **Main Panel** (right side) - Switches between gamified exercises, measurement functionalities, and a debug view.
+This application provides the user interface for the rehabilitation device. It features:
+- A **Hardware Control Panel** (side panel) for device connection, status, visualization, and settings.
+- A **Main Panel** with tabs for: 
+    - **Gamified Exercises**: Engaging games controlled by the device.
+    - **Measurement**: Recording and visualizing force data over time.
+    - **Debug**: Controlling connection mode and viewing raw/processed data.
 
 ## Features
 
 ### Hardware Control Panel
-
-- **Device Status**: Connect/disconnect from the rehabilitation device
-- **Touch Visualization**: Real-time visualization of touch points on the membrane
-- **Force Levels**: Visual representation of the force applied
-- **Settings**: Adjust sensitivity and force threshold settings
-- **Toggle Panel**: Ability to hide/show the side panel
+- **Device Status**: Shows connection status (Simulated/Connected/Disconnected).
+- **Touch Visualization**: Interactive ellipsoid representing the device (clicks show temporary points).
+- **Force Levels**: Vertical bar visualizing normalized force (0-1).
+- **Settings**: Placeholders for Sensitivity and Force Threshold sliders.
+- **Toggle Panel**: Button to hide/show the side panel.
 
 ### Gamified Exercises
-
-- Selection of different rehabilitation games:
-  - **Flappy Bird**: Control using pressure inputs (1D control)
-  - **Mini Golf**: Directional and force control (2D control)
-  - **Piano Keys**: Multiple touch points exercise
+- **Game Selection**: Cards for available games.
+- **Flappy Bird**: Integrated and controllable via device force input (when force > threshold).
+- **Placeholders**: Cards for future games (Mini Golf, Piano Keys).
 
 ### Measurement
+- **Start/Stop Measurement**: Controls data recording.
+- **Save Results**: Logs session data (Max/Avg Force, Duration, Raw Data) to the console.
+- **Real-time Metrics**: Displays Max Force, Average Force, and Session Duration.
+- **Data Visualization**: Live Chart.js line graph showing normalized force vs. time.
 
-- **Start/Stop Measurement**: Begin/end a measurement session
-- **Save Results**: Save measurement data
-- **Real-time Metrics**: Display of current force measurements
-- **Data Visualization**: Graph showing force measurements over time
+### Debug
+- **Mode Switching**: Toggle between "Simulation" and "Arduino" modes.
+- **Connection Control**: "Connect/Disconnect" button for Arduino mode (uses browser port selection).
+- **Live Data**: Displays latest raw pressure value and normalized force value (0-1).
+- **Data Log**: Shows timestamped simulator pressure/force data or status messages (Start/Stop/Clear controls).
+
+## Architecture & Technical Details
+
+- **Stack**: HTML, CSS, Vanilla JavaScript.
+- **Communication**: 
+    - Uses Web Serial API (`window._realNavigatorSerial`) for real Arduino connection (Chrome/Edge recommended).
+    - Includes a built-in JavaScript simulator (`window.serialSimulatorInstance`) mimicking `SerialPort` for testing/fallback.
+    - Mode switching managed by `InputModeManager` class.
+    - Connection logic handled by `ArduinoConnection` class.
+- **Event-Driven**: Internal communication uses Custom Events (`forceupdate`, `modechanged`, `sim-control`, etc.) dispatched on `document`.
+- **Simulation Control**: In Simulation mode, spacebar press/hold dispatches `sim-control` events to the simulator.
+- **Force Processing**: Raw pressure values (from Arduino or simulator) are normalized to a 0-1 range.
+- **Visualization**: Uses HTML Canvas for ellipsoid and CSS for force bar. Chart.js for measurement graph.
 
 ## Getting Started
 
-1. Open `index.html` in your web browser to view the interface
-2. The interface is interactive:
-   - Try clicking on the tabs to switch between exercises and measurement
-   - Click the hide/show button at the bottom of the side panel
-   - Interact with the touch visualization canvas with your mouse
-   - Click the connect/disconnect button
-   - Try the start/stop measurement button
+1.  Clone the repository.
+2.  Open `index.html` in a web browser (Chrome or Edge recommended for full functionality).
+3.  **Simulation Mode (Default)**:
+    *   The interface starts in Simulation mode.
+    *   Press and hold the **Spacebar** to simulate increasing force.
+    *   Observe the force bar, debug values, measurement chart (if started), and Flappy Bird (if played) respond.
+4.  **Arduino Mode**:
+    *   Connect your Arduino device running the expected sketch (see below).
+    *   Go to the **Debug** tab.
+    *   Click **Use Simulation** (button text changes to "Using Simulation" indicating switch *request*).
+    *   Click **Connect to Arduino**.
+    *   Select the correct serial port in the browser dialog.
+    *   Apply pressure to your sensor; UI elements should respond.
+    *   Click **Disconnect** to close the connection.
+    *   Click **Using Simulation** (button text changes to "Use Simulation") to switch back to Simulation mode.
+
+## Arduino Sketch (Example)
+
+```cpp
+const int forcePin = A0;  // Analog pin for force sensor (Adjust if needed)
+
+void setup() {
+  Serial.begin(9600); 
+}
+
+void loop() {
+  // Read sensor value (e.g., pressure in Pascals, or raw 0-1023)
+  // float pressureValue = readPressureSensor(); // Replace with your sensor reading
+  int rawValue = analogRead(forcePin); // Example using analogRead
+  float pressureValue = map(rawValue, 0, 1023, 101300, 102300); // Example mapping to pressure
+
+  // Send the value followed by a newline
+  Serial.println(pressureValue);
+  
+  // Delay slightly - adjust based on sensor and desired update rate
+  delay(20); // Send data roughly 50 times per second
+}
+```
+**Note**: The interface `script.js` currently assumes the Arduino sends pressure values (around 101300 Pa base). Adjust the Arduino code or the normalization constants in `script.js` if your sensor outputs different values (e.g., raw 0-1023).
+
+## Troubleshooting
+
+- **No Connection (Arduino Mode)**: Ensure Chrome/Edge is used, device is plugged in, correct port selected, drivers installed.
+- **UI Not Responding**: Check the browser console (F12) for errors. Ensure correct mode is selected.
+- **Incorrect Force Values**: Verify the Arduino sketch sends data in the expected format (pressure value per line) and matches the normalization constants in `script.js` (`basePressure`, `pressureRange`).
 
 ## Next Steps for Development
 
