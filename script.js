@@ -223,6 +223,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Process the received data
                     const rawValueString = new TextDecoder().decode(value).trim(); 
+                    console.log("Raw value string:", rawValueString);
                     rawValue = parseFloat(rawValueString); 
                     let normalizedForce = 0;
 
@@ -232,8 +233,8 @@ document.addEventListener('DOMContentLoaded', function() {
                          if (rawValue >= 0 && rawValue <= 1023) {
                              normalizedForce = rawValue / 1023.0;
                          } else { // Assume pressure
-                             const basePressure = 101300; 
-                             const pressureRange = 1000;  
+                             const basePressure = 100000; //101300; 
+                             const pressureRange = 20000;  
                              normalizedForce = (rawValue - basePressure) / pressureRange;
                              normalizedForce = Math.max(0, Math.min(1, normalizedForce)); 
                          }
