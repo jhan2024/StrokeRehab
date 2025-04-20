@@ -45,9 +45,16 @@
 
 ### Flappy Bird
 - **Implementation**: Integrated based on nebez/floppybird.
-- **Adaptations**: Reduced gravity, jump power, speed; wider pipes, longer intervals.
+- **Adaptations**: Reduced gravity, jump power, speed; adjustable difficulty via settings.
 - **Rehabilitation Focus**: Connected to force measurement via event listener (`forceupdate`). Jump triggered when normalized force exceeds threshold.
 - **Interface**: Launches in overlay, close button returns to main view.
+- **Recent Modifications (Rehab Focus):**
+    - **Single Pipe Obstacle**: Changed from two pipes to a single upper or lower pipe obstacle, appearing randomly.
+    - **Dual Control Modes**: 
+        - *Jump Threshold (Original)*: Force spikes trigger a fixed jump.
+        - *Force Control (New)*: Sustained force input directly counters gravity, allowing for smoother lift control.
+    - **Score-Triggered Pipe Generation**: The next pipe obstacle is generated only a set interval *after* the player successfully passes the current one.
+    - **Collision Refinement**: Iteratively debugged and adjusted collision detection logic to handle coordinate systems (document vs. viewport) and CSS positioning (including pseudo-elements) accurately, resolving issues with invisible collisions.
 
 ## Arduino Integration & Simulation
 

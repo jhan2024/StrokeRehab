@@ -406,17 +406,41 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log("Spacebar listeners REMOVED");
         }
 
-        // Spacebar handlers - now dispatch sim-control events
+        // Spacebar handlers - now dispatch sim-control events OR handle game starts/jumps
         handleKeyDown(e) {
             if (!this._boundKeyDown) return; 
-            if (e.code === 'Space' && !this.spacebarPressed) {
-                 if (this.currentMode === 'simulation' || (this.currentMode === 'arduino' && window.serialSimulatorInstance?.isOpen)) { // Allow control if sim is underlying port in arduino mode
-                    this.spacebarPressed = true;
-                    this.spacebarHoldStartTime = Date.now();
-                    // Dispatch event to control simulator
-                    document.dispatchEvent(new CustomEvent(EVT_SIM_CONTROL, { detail: { action: 'start' } }));
-                    e.preventDefault(); 
-                 } 
+            if (e.code === 'Space') {
+                e.preventDefault(); // Prevent default scroll
+
+                // 1. Handle Simulator Control (If in Sim mode)
+                if (this.currentMode === 'simulation') {
+                    if (!this.spacebarPressed) {
+                        this.spacebarPressed = true;
+                        this.spacebarHoldStartTime = Date.now();
+                        document.dispatchEvent(new CustomEvent(EVT_SIM_CONTROL, { detail: { action: 'start' } }));
+                    }
+                    return; // Don't process game actions if controlling simulator
+                }
+
+                // 2. Handle Game Actions (If a game is active)
+                if (isGameControlActive) { // Flappy Bird Active
+                    // Check if flappy jump function exists and call it
+                    if (typeof window.flappyGameJump === 'function') {
+                        window.flappyGameJump();
+                    } else {
+                        console.warn("window.flappyGameJump function not found!");
+                    }
+                } else if (isSpaceShooterActive) { // Space Shooter Active
+                    // Spacebar doesn't start Space Shooter; it's started via button press
+                    // and restarted via its own game over listener.
+                    // if (typeof startGame === 'function' && typeof window.isSpaceShooterRunning === 'function' && !window.isSpaceShooterRunning()) {
+                         console.log("Spacebar pressed: Starting Space Shooter.");
+                    // } else if (typeof startGame !== 'function') {
+                    //     console.warn("startGame function not found for Space Shooter!");
+                    // } else if (typeof window.isSpaceShooterRunning !== 'function'){
+                    //     console.warn("isSpaceShooterRunning function not found!");
+                    // }
+                }
             }
         }
 
@@ -945,8 +969,48 @@ document.addEventListener('DOMContentLoaded', function() {
              // if(typeof window.stopGame === 'function') window.stopGame();
         });
     }
+    
+    // --- Space Shooter Game Integration ---
+    let isSpaceShooterActive = false;
+    
+    // Get Space Shooter elements
+    const playSpaceShooterBtn = document.getElementById('playSpaceShooter');
+    const closeSpaceShooterBtn = document.getElementById('closeSpaceShooter');
+    const spaceShooterContainer = document.getElementById('spaceShooterGame');
+    
+    // Play Button Setup
+    if (playSpaceShooterBtn && spaceShooterContainer) {
+        playSpaceShooterBtn.addEventListener('click', function() {
+            spaceShooterContainer.style.display = 'flex';
+            isSpaceShooterActive = true;
+            console.log("Space Shooter control ACTIVATED");
+            
+            // Start the game
+            if (typeof window.startSpaceShooter === 'function') {
+                window.startSpaceShooter();
+            } else {
+                console.warn("Space Shooter game not loaded!");
+            }
+        });
+    }
+    
+    // Close Button Setup
+    if (closeSpaceShooterBtn && spaceShooterContainer) {
+        closeSpaceShooterBtn.addEventListener('click', function() {
+            spaceShooterContainer.style.display = 'none';
+            isSpaceShooterActive = false;
+            console.log("Space Shooter control DEACTIVATED");
+            
+            // Stop the Space Shooter game loop
+            if (typeof stopGame === 'function') { 
+                stopGame();
+            } else {
+                console.warn("stopGame function not found in spaceshooter.js");
+            }
+        });
+    }
 
-    // Debug Tab Initialization (Modify button handlers)
+    // --- Debug Tab Setup ---
     function initializeDebugTab() {
         console.log("Initializing Debug Tab listeners...");
          // Only query if not already done

@@ -1,3 +1,4 @@
+(function() {
 /*
    Modified Flappy Bird for Hand Rehabilitation
    Original code by Nebez Briefkani
@@ -416,21 +417,25 @@ function screenClick() {
    }
 }
 
+// Ensure flappyGameJump is globally accessible
 window.flappyGameJump = function() {
    // External trigger function - only active in 'jump' mode
    if (controlMode === 'jump') {
        if(currentstate == states.GameScreen) {
            playerJump();
        } else if (currentstate == states.SplashScreen) {
-           startGame();
+           // Use the startGame defined *within this scope*
+           startGame(); 
        }
    } else {
        // If in gravity mode and splash screen, start the game (force might trigger this)
        if (currentstate == states.SplashScreen) {
+            // Use the startGame defined *within this scope*
             startGame();
        }
    }
 };
+
 function playerJump() {
    // Only allow jump logic in 'jump' mode
    if (controlMode !== 'jump') return;
@@ -889,3 +894,5 @@ $(document).ready(function() {
     `)
     .appendTo('head');
 }); 
+
+})(); // End IIFE 
