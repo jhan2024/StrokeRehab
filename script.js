@@ -1,4 +1,7 @@
 document.addEventListener('DOMContentLoaded', function() {
+    
+
+
     // Tab Switching
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
@@ -223,7 +226,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Process the received data
                     const rawValueString = new TextDecoder().decode(value).trim(); 
-                    console.log("Raw value string:", rawValueString);
+                    // console.log("Raw value string:", rawValueString);
                     rawValue = parseFloat(rawValueString); 
                     let normalizedForce = 0;
 
@@ -231,7 +234,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!isNaN(rawValue)) {
                         
                         if (rawValue < 100000) {
-                            console.log("Raw value is less than 100000: ", rawValue);
+                            // console.log("Raw value is less than 100000: ", rawValue);
                             rawValue = 100000;
                         }
 
@@ -481,6 +484,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const inputManager = new InputModeManager();
     window.inputManager = inputManager; // Keep global ref if needed by ArduinoConnection
 
+    // ---> ADDED: Global variable for game access <---
+    window.latestNormalizedForce = 0; 
+
     // --- UI Element References (Cached) ---
     const sidePanelConnectBtn = document.getElementById('side-panel-connect-btn'); // Assuming this ID for the blue button
     const sidePanelStatusIndicator = document.querySelector('.side-panel .status-indicator');
@@ -515,6 +521,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener(EVT_FORCE_UPDATE, (event) => {
         const { force, rawPressure } = event.detail;
         
+        // ---> ADDED: Update global force variable <---
+        window.latestNormalizedForce = force; 
+
         // Update Debug Tab display
         if (debugPressureValue) debugPressureValue.textContent = typeof rawPressure === 'number' && !isNaN(rawPressure) ? rawPressure.toFixed(2) : 'N/A'; 
         if (debugRawValue) debugRawValue.textContent = typeof force === 'number' ? force.toFixed(3) : 'N/A'; 
