@@ -229,15 +229,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     // Example: If data is just `rawValue`
                     if (!isNaN(rawValue)) {
-                        // Check if it looks like 0-1023 (less likely now)
-                         if (rawValue >= 0 && rawValue <= 1023) {
-                             normalizedForce = rawValue / 1023.0;
-                         } else { // Assume pressure
-                             const basePressure = 100000; //101300; 
-                             const pressureRange = 20000;  
-                             normalizedForce = (rawValue - basePressure) / pressureRange;
-                             normalizedForce = Math.max(0, Math.min(1, normalizedForce)); 
-                         }
+                        
+                        if (rawValue < 100000) {
+                            console.log("Raw value is less than 100000: ", rawValue);
+                            rawValue = 100000;
+                        }
+
+                        // pressure
+                        const basePressure = 100000; //101300; 
+                        const pressureRange = 20000;  
+                        normalizedForce = (rawValue - basePressure) / pressureRange;
+                        normalizedForce = Math.max(0, Math.min(1, normalizedForce)); 
+                    
                          // Directly call the InputModeManager's handler
                          if (window.inputManager) {
                              window.inputManager.handleForceUpdate(normalizedForce, rawValue);
@@ -278,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
             this.spacebarHoldStartTime = 0;
             this._boundKeyDown = null; 
             this._boundKeyUp = null;   
-            this.GAME_FORCE_THRESHOLD = 0.3; 
+            this.GAME_FORCE_THRESHOLD = 0.1; 
 
              // Add browser compatibility warning if needed (only if real serial is attempted)
              if (!this.arduino.isWebSerialSupported) {
@@ -511,9 +514,31 @@ document.addEventListener('DOMContentLoaded', function() {
     // Debug Tab Updater
     document.addEventListener(EVT_FORCE_UPDATE, (event) => {
         const { force, rawPressure } = event.detail;
+        
+        // Update Debug Tab display
         if (debugPressureValue) debugPressureValue.textContent = typeof rawPressure === 'number' && !isNaN(rawPressure) ? rawPressure.toFixed(2) : 'N/A'; 
         if (debugRawValue) debugRawValue.textContent = typeof force === 'number' ? force.toFixed(3) : 'N/A'; 
         if (debugLastUpdate) debugLastUpdate.textContent = new Date().toLocaleTimeString();
+        
+        // Update Side Panel Visualization
+        window.updateForceBar(force);
+        window.drawEllipsoid(force);
+        
+        // Handle Measurement Recording
+        if (isMeasuring) { 
+            recordMeasurement(force); 
+        }
+        
+        // Handle Flappy Bird Control
+        if (isGameControlActive && force >= inputManager.GAME_FORCE_THRESHOLD) {
+            // Check if the game's jump function exists and call it
+            if (typeof window.flappyGameJump === 'function') {
+                 console.log(`Flappy Bird Jump Triggered by force: ${force.toFixed(3)}`); // Log jump trigger
+                window.flappyGameJump();
+            } else {
+                // console.warn("window.flappyGameJump function not found!");
+            }
+        }
     });
 
     // Debug Tab Controls Updater (Mode Changes)
@@ -882,44 +907,8 @@ document.addEventListener('DOMContentLoaded', function() {
          console.warn("Touch canvas element (#touchCanvas) not found. Side panel drawing disabled.");
     }
 
-    // --- Add the EVT_FORCE_UPDATE listener for visualization AFTER functions are defined ---
-    document.addEventListener(EVT_FORCE_UPDATE, (event) => {
-         // console.log(`Visualization Listener: Received ${EVT_FORCE_UPDATE}`); // Log 6
-         const { force } = event.detail;
-         // Call the globally defined functions (stubs or real ones)
-         // console.log(`Visualization Listener: Calling updateForceBar with force: ${force.toFixed(3)}`); // Log 7
-         window.updateForceBar(force);
-         // console.log(`Visualization Listener: Calling drawEllipsoid with force: ${force.toFixed(3)}`);
-         window.drawEllipsoid(force);
-    });
-
     // --- Flappy Bird Game Integration (Event Listener Based) ---
-    let gameSpacebarTimeout = null; 
     let isGameControlActive = false; // Flag to enable/disable game control
-
-    // Function to trigger the jump (simulated spacebar press)
-    function triggerFlappyJump() {
-         if (gameSpacebarTimeout === null && gameContainer.style.display === 'flex') { 
-             console.log(`Flappy Bird Jump Triggered`); // Log without force here
-             const jumpEvent = new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true });
-             document.dispatchEvent(jumpEvent); 
-             
-             gameSpacebarTimeout = setTimeout(() => {
-                 const releaseEvent = new KeyboardEvent('keyup', { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true });
-                 document.dispatchEvent(releaseEvent);
-                 gameSpacebarTimeout = null; 
-             }, 100); 
-         }
-    }
-    
-    // Listen for force updates IF game control is active
-    document.addEventListener(EVT_FORCE_UPDATE, (event) => {
-         // console.log(`Measurement Listener: Received ${EVT_FORCE_UPDATE}. isMeasuring: ${isMeasuring}`); // Log 3
-         if (!isMeasuring) return; 
-         const { force } = event.detail;
-         // console.log(`Measurement Listener: Calling recordMeasurement with force: ${force.toFixed(3)}`); // Log 4
-         recordMeasurement(force); 
-    });
 
     // Play Button Setup
     if (playFlappyBtn && gameContainer) {
@@ -937,13 +926,13 @@ document.addEventListener('DOMContentLoaded', function() {
             gameContainer.style.display = 'none'; 
             isGameControlActive = false; // Disable force control
             console.log("Flappy Bird control DEACTIVATED");
-            // Clear any pending key release timeout
-            if (gameSpacebarTimeout) {
-                clearTimeout(gameSpacebarTimeout);
-                gameSpacebarTimeout = null;
-                 const releaseEvent = new KeyboardEvent('keyup', { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true });
-                 document.dispatchEvent(releaseEvent); // Ensure key is released
-            }
+            // Clear any pending key release timeout - NOT NEEDED ANYMORE
+            // if (gameSpacebarTimeout) {
+            //     clearTimeout(gameSpacebarTimeout);
+            //     gameSpacebarTimeout = null;
+            //      const releaseEvent = new KeyboardEvent('keyup', { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true });
+            //      document.dispatchEvent(releaseEvent); // Ensure key is released
+            // }
              // if(typeof window.stopGame === 'function') window.stopGame();
         });
     }

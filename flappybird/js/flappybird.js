@@ -283,7 +283,7 @@ function setInputHandlers() {
          }
          else if(currentstate == states.GameScreen) {
             // In game, spacebar makes the bird jump
-            screenClick();
+            // screenClick();
          }
       }
    });
@@ -366,15 +366,21 @@ function screenClick() {
    }
 }
 
+window.flappyGameJump = function() {
+   // Only jump if in the game screen state
+   if(currentstate == states.GameScreen) {
+      playerJump();
+   } else if (currentstate == states.SplashScreen) {
+      // If on splash screen, start the game
+      startGame();
+   }
+};
 function playerJump() {
    velocity = jump;
    
-   // Create jump animation
+   // No need for additional jump animation as bird is already animated with infinite animation
    $("#player").stop();
-   $("#player").addClass("birdjump");
-   setTimeout(function() {
-      $("#player").removeClass("birdjump");
-   }, 100);
+   // Animation is handled by CSS now via the .bird class
 }
 
 function setBigScore(erase) {
@@ -592,23 +598,23 @@ function updateScoreboard() {
    });
 }
 
-// Connect flappy bird controls to our existing force bar
-$(document).ready(function() {
-   // When the spacebar is pressed, we'll use the existing force level
-   // from our force bar to determine jump height
+// // Connect flappy bird controls to our existing force bar
+// $(document).ready(function() {
+//    // When the spacebar is pressed, we'll use the existing force level
+//    // from our force bar to determine jump height
    
-   $(document).keydown(function(e) {
-      if(e.keyCode == 32) { // Spacebar
-         // Only apply custom force when in game
-         if(currentstate == states.GameScreen) {
-            // Get current force from our force bar
-            var forceLevel = parseFloat($(".force-level").css("height")) / 100;
+//    $(document).keydown(function(e) {
+//       if(e.keyCode == 32) { // Spacebar
+//          // Only apply custom force when in game
+//          if(currentstate == states.GameScreen) {
+//             // Get current force from our force bar
+//             var forceLevel = parseFloat($(".force-level").css("height")) / 100;
             
-            // Adjust jump strength based on force level (max at 100%)
-            // Scale between minForceEffect and maxForceEffect of normal jump power
-            velocity = jump * (gameSettings.minForceEffect + 
-                              (gameSettings.maxForceEffect - gameSettings.minForceEffect) * forceLevel);
-         }
-      }
-   });
-}); 
+//             // Adjust jump strength based on force level (max at 100%)
+//             // Scale between minForceEffect and maxForceEffect of normal jump power
+//             velocity = jump * (gameSettings.minForceEffect + 
+//                               (gameSettings.maxForceEffect - gameSettings.minForceEffect) * forceLevel);
+//          }
+//       }
+//    });
+// }); 

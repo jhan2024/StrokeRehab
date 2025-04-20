@@ -59,25 +59,26 @@
 /* Bird character */
 .bird {
     position: absolute;
-    width: 64px;
-    height: 64px;
+    width: 34px;
+    height: 24px;
     left: 60px;
     top: 0;
     background-image: url('../assets/bird.png');
     background-repeat: no-repeat;
+    
+    -webkit-animation: animBird 300ms steps(4) infinite;
+    animation: animBird 300ms steps(4) infinite;
 }
 
 /* Animation for flapping */
-.birdjump {
-    animation: birdflap 0.4s;
+@keyframes animBird {
+    from { background-position: 0px 0px; }
+    to { background-position: 0px -96px; }
 }
 
-@keyframes birdflap {
-    0% { background-position: 0px 0px; }
-    25% { background-position: 0px -64px; }
-    50% { background-position: 0px -128px; }
-    75% { background-position: 0px -192px; }
-    100% { background-position: 0px 0px; }
+@-webkit-keyframes animBird {
+    from { background-position: 0px 0px; }
+    to { background-position: 0px -96px; }
 }
 
 /* Pipes */
