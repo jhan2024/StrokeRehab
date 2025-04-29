@@ -426,13 +426,19 @@ window.flappyGameJump = function() {
        } else if (currentstate == states.SplashScreen) {
            // Use the startGame defined *within this scope*
            startGame(); 
-       }
+       } 
    } else {
        // If in gravity mode and splash screen, start the game (force might trigger this)
        if (currentstate == states.SplashScreen) {
             // Use the startGame defined *within this scope*
             startGame();
        }
+   }
+
+   // Add replay functionality for score screen
+   if (currentstate == states.ScoreScreen && replayclickable) {
+       replayclickable = false;
+       showSplash();
    }
 };
 

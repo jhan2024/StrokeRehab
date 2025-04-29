@@ -233,16 +233,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Example: If data is just `rawValue`
                     if (!isNaN(rawValue)) {
                         
-                        if (rawValue < 100000) {
-                            // console.log("Raw value is less than 100000: ", rawValue);
-                            rawValue = 100000;
-                        }
+                        // Use basePressure and pressureRange from InputModeManager
+                        const basePressure = window.inputManager ? window.inputManager.basePressure : 100000; // Fallback default
+                        const pressureRange = window.inputManager ? window.inputManager.pressureRange : 5000; // Fallback default
 
-                        // pressure
-                        const basePressure = 100000; //101300; 
-                        const pressureRange = 20000;  
-                        normalizedForce = (rawValue - basePressure) / pressureRange;
-                        normalizedForce = Math.max(0, Math.min(1, normalizedForce)); 
+                        // Clamp raw value to base pressure before normalization if desired (optional)
+                        // rawValue = Math.max(rawValue, basePressure);
+
+                        normalizedForce = (rawValue - basePressure) / pressureRange; 
+                        normalizedForce = Math.max(0, Math.min(1, normalizedForce)); // Clamp normalized force between 0 and 1
                     
                          // Directly call the InputModeManager's handler
                          if (window.inputManager) {
@@ -280,6 +279,10 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log(`InputModeManager initial mode: ${this.currentMode}`);
             
             this.currentForce = 0; 
+            this.latestRawPressure = NaN; // Store the last raw pressure reading
+            this.basePressure = 100000; // Default base pressure
+            this.pressureRange = 5000;  // Default pressure range
+            
             this.spacebarPressed = false;
             this.spacebarHoldStartTime = 0;
             this._boundKeyDown = null; 
@@ -368,6 +371,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Central handler - now dispatches forceupdate event
         handleForceUpdate(normalizedForce, rawPressure) {
             this.currentForce = normalizedForce; 
+            this.latestRawPressure = rawPressure; // Update latest raw pressure
             // console.log(`InputManager: Handling force update. Force: ${normalizedForce.toFixed(3)}, Raw: ${rawPressure}`); // Log 1
             
             // Dispatch event with both values
@@ -583,6 +587,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!debugElements.connectBtn) { 
             debugElements.connectBtn = document.querySelector('#debugContent .connect-btn');
             debugElements.simulationToggle = document.querySelector('#debugContent .simulation-toggle');
+            debugElements.calibrateZeroBtn = document.querySelector('#debugContent #calibrateZeroBtn');
+            debugElements.pressureRangeInput = document.querySelector('#debugContent #pressureRangeInput');
             debugElements.startLogBtn = document.querySelector('#debugContent .start-log');
             debugElements.clearLogBtn = document.querySelector('#debugContent .clear-log');
             debugElements.debugStatusIndicator = document.querySelector('#debugContent .debug-status-indicator'); // Cache this too
@@ -1017,8 +1023,11 @@ document.addEventListener('DOMContentLoaded', function() {
          if (!debugElements.connectBtn) {
              debugElements.connectBtn = document.querySelector('#debugContent .connect-btn');
              debugElements.simulationToggle = document.querySelector('#debugContent .simulation-toggle');
+             debugElements.calibrateZeroBtn = document.querySelector('#debugContent #calibrateZeroBtn');
+             debugElements.pressureRangeInput = document.querySelector('#debugContent #pressureRangeInput');
              debugElements.startLogBtn = document.querySelector('#debugContent .start-log');
              debugElements.clearLogBtn = document.querySelector('#debugContent .clear-log');
+             debugElements.debugStatusIndicator = document.querySelector('#debugContent .debug-status-indicator'); // Cache this too
          }
          
          // --- Attach Listeners using cloneNode trick --- 
@@ -1049,6 +1058,43 @@ document.addEventListener('DOMContentLoaded', function() {
              const targetMode = isCurrentlySimulation ? 'arduino' : 'simulation';
              await inputManager.switchMode(targetMode); // switchMode dispatches EVT_MODE_CHANGED
          });
+
+         debugElements.calibrateZeroBtn = attachListener(debugElements.calibrateZeroBtn, 'click', () => {
+             if (window.inputManager && !isNaN(window.inputManager.latestRawPressure)) {
+                 window.inputManager.basePressure = window.inputManager.latestRawPressure;
+                 console.log(`Calibrated base pressure to: ${window.inputManager.basePressure}`);
+                 // Optional: Provide visual feedback
+                  document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { 
+                     detail: { message: `Zero pressure calibrated to ${window.inputManager.basePressure.toFixed(0)}`, type: 'success' } 
+                  }));
+             } else {
+                  console.warn("Cannot calibrate: No valid raw pressure reading available.");
+                 document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { 
+                    detail: { message: 'Calibration failed: No valid pressure reading.', type: 'error' } 
+                 }));
+             }
+         });
+
+         debugElements.pressureRangeInput = attachListener(debugElements.pressureRangeInput, 'input', () => {
+             if (window.inputManager && debugElements.pressureRangeInput) {
+                 const newValue = parseFloat(debugElements.pressureRangeInput.value);
+                 if (!isNaN(newValue) && newValue > 0) {
+                     window.inputManager.pressureRange = newValue;
+                     console.log(`Set pressure range to: ${window.inputManager.pressureRange}`);
+                     // Optional: Add visual valid/invalid state to input
+                     debugElements.pressureRangeInput.style.borderColor = '';
+                 } else {
+                     console.warn(`Invalid pressure range input: ${debugElements.pressureRangeInput.value}`);
+                      // Optional: Add visual invalid state to input
+                     debugElements.pressureRangeInput.style.borderColor = 'red';
+                 }
+             }
+         });
+
+         // Set initial value for pressure range input
+         if (debugElements.pressureRangeInput && window.inputManager) {
+             debugElements.pressureRangeInput.value = window.inputManager.pressureRange;
+         }
 
          debugElements.startLogBtn = attachListener(debugElements.startLogBtn, 'click', () => {
              const isLogging = debugElements.startLogBtn.classList.toggle('active');
