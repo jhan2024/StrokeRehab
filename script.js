@@ -1016,6 +1016,44 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // --- Pool Game Integration ---
+    let isPoolGameActive = false;
+    
+    // Get Pool Game elements
+    const playPoolGameBtn = document.getElementById('playPoolGame');
+    const closePoolGameBtn = document.getElementById('closePoolGame');
+    const poolGameContainer = document.getElementById('poolGameContainer');
+    
+    // Play Button Setup
+    if (playPoolGameBtn && poolGameContainer) {
+        playPoolGameBtn.addEventListener('click', function() {
+            poolGameContainer.style.display = 'flex';
+            isPoolGameActive = true;
+            console.log("Pool Game control ACTIVATED");
+            
+            // Start the game
+            if (typeof window.startPoolGame === 'function') {
+                window.startPoolGame();
+            } else {
+                console.warn("Pool Game not loaded!");
+            }
+        });
+    }
+    
+    // Close Button Setup
+    if (closePoolGameBtn && poolGameContainer) {
+        closePoolGameBtn.addEventListener('click', function() {
+            poolGameContainer.style.display = 'none';
+            isPoolGameActive = false;
+            console.log("Pool Game control DEACTIVATED");
+            
+            // Stop the game
+            if (typeof window.stopPoolGame === 'function') {
+                window.stopPoolGame();
+            }
+        });
+    }
+
     // --- Debug Tab Setup ---
     function initializeDebugTab() {
         console.log("Initializing Debug Tab listeners...");

@@ -1,0 +1,39 @@
+<body style = "background-color: rgb(220,220,220);">
+
+	<header style = "text-align: left; font-family: Arial; font-style: bold; padding-left: 100px; background-color: rgb(100,100,100); width: 50%; min-width: 800px; margin: auto; padding-top: 20px; padding-bottom: 50px;">
+		<h1>
+			<font color = "white">Pool</font>
+		</h1>
+		<h3>
+			<font color = "white">A simple game written with JavaScript in HTML5 canvas.</font>
+		</h3>
+	</header>
+
+	<div style = "text-align: left; font-family: Arial; font-style: bold; padding-left: 50px; padding-right: 50px; background-color: rgb(255,255,255); width: 50%; min-width: 800px; margin: auto; padding-top: 100px; padding-bottom: 50px;">
+		<div id = "container" style = "text-align: center">
+			<canvas id = "Collisions" width = "800" height = "400"></canvas>
+		</div>
+
+		<div style = "text-align: left; padding-left: 100px; padding-right: 100px; margin-top: 100px; font-family: Arial;">
+			<h1>High Scores</h1>
+		</div>
+
+		<div style = "text-align: left; padding-left: 100px; padding-right: 100px; font-family: Arial; margin-top: 100px;">
+			<h1>Description</h1>
+			<h3>I wrote this game in pure JavaScript using the circle collision physics engine outlined in Eric Leong's website <a href = "https://ericleong.me/research/circle-circle/">here</a>.</h3>
+			<h3>The physics for the holes was my own buggy code :)</h3>
+			<h3>The goal of the game is to sink every ball without sinking the cue ball in the fewest number of moves. Click to shoot the cue ball; the farther you click from the cue ball the faster it will shoot.
+		</div>
+	</div>
+	<footer style = "text-align: left; background-color: rgb(0,0,0); padding-top: 20px; width: 50%; min-width: 800px; margin: auto; padding-left: 100px; font-family: Arial; font-style: bold;">
+		<h2>
+			<font color = "white">Abdul Zakkar</font>
+		</h2>
+	</footer>
+
+	<script src = "point.js"></script>
+	<script src = "hole.js"></script>
+	<script src = "circle.js"></script>
+	<script src = "animation.js"></script>
+	<script src = "collisions.js"></script>
+</body>

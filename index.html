@@ -92,6 +92,12 @@
                         <p>Vertical control with force input</p>
                         <button class="play-btn" id="playSpaceShooter">Play</button>
                     </div>
+                    <div class="game-card" id="poolGameCard">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%2327ae60'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🎱%3C/text%3E%3C/svg%3E" alt="Pool Game">
+                        <h3>Pool Game</h3>
+                        <p>Direction + Force control</p>
+                        <button class="play-btn" id="playPoolGame">Play</button>
+                    </div>
                 </div>
                 
                 <!-- Flappy Bird Game Container -->
@@ -138,6 +144,20 @@
                             <div id="controls-help">
                                 <p>Use force input to move your ship up and down!</p>
                                 <p>Press SPACE to start</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Pool Game Container -->
+                <div id="poolGameContainer" style="display: none;">
+                    <button id="closePoolGame" class="close-game-btn">Close Game</button>
+                    <div id="pool-container" style="text-align: center">
+                        <canvas id="poolCanvas" width="800" height="400"></canvas>
+                        <div id="pool-ui">
+                            <div id="pool-score-display">Shots: <span id="shots-count">0</span></div>
+                            <div id="pool-controls-help">
+                                <p>Use mouse to aim, force input determines shot power</p>
                             </div>
                         </div>
                     </div>
@@ -232,6 +252,7 @@
     <script src="flappybird/assets/placeholder.js"></script>
     <script src="flappybird/js/flappybird.js"></script>
     <script src="spaceshooter/js/spaceshooter.js"></script>
+    <script src="poolgame/js/poolgame.js"></script>
     
     <!-- Main Scripts -->
     <script src="serial-simulator.js"></script>
