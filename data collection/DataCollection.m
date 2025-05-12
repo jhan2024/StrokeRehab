@@ -1,12 +1,15 @@
 %% Experiment Setup
 clear; clc;
 
-behavior_mode = 'M1';             % Set behavior label M1~M7
+behavior_mode = 'M7';             % Set behavior label M1~M7
 n_trials = 10;                    % Repetitions for this behavior
-interval = 3;                     % Cue interval in seconds
-press_threshold = 105000;           % Pressure threshold to detect press start (in hPa)
-release_threshold = 103000;         % Release threshold (when below this = released)
-max_duration = 3;                 % Max wait after cue
+interval = 5;                     % Cue interval in seconds
+% M1 normal,  M3 short, M5 weak =3
+% M2 delayed, M4 long           =7
+% M6 strong,  M7 jittery        =5
+press_threshold = 102000;           % Pressure threshold to detect press start (in hPa)
+release_threshold = 102000;         % Release threshold (when below this = released)
+max_duration = interval;                 % Max wait after cue
 
 % === Setup COM3 serial for BMP280 ===
 serialObj = serialport("COM3", 9600);
@@ -17,7 +20,7 @@ pause(2);  % Wait for Arduino to reset
 read_pressure = @() str2double(readline(serialObj));  % Read pressure from BMP280
 
 % === Load cue image ===
-cue_img = imread('cue1.png');  % replace with your actual image
+cue_img = imread('cue7.png');  % replace with your actual image
 
 % === Initialize storage ===
 Data = struct('trial', {}, 'label', {}, 'cue_time', {}, ...
@@ -74,12 +77,18 @@ for i = 1:n_trials
     close(100);  % Close cue image
 
     % === Feature computation ===
-    if ~isnan(press_time) && ~isnan(release_time)
-        duration = release_time - press_time;
+    if ~isnan(press_time)
         delay = press_time;
+
+        if ~isnan(release_time)
+            duration = release_time - press_time;
+        else
+            % If no release detected, use the full trial time as end
+            duration = toc(t0) - press_time;
+        end
     else
-        duration = NaN;
         delay = NaN;
+        duration = NaN;
     end
 
     % === Store data ===
