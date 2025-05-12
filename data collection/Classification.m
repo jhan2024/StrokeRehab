@@ -1,4 +1,4 @@
-%% Step 1: Load data
+%% Step 1: Load and merge multiple data files using real labels
 clear; clc;
 
 data_folder = 'Data';  % <-- change to your actual folder path
