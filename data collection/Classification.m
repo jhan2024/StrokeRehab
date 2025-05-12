@@ -1,66 +1,73 @@
-%% Step 1: Load data
+%% Step 1: Load and merge multiple data files using real labels
 clear; clc;
 
-load('press_data_M1_153245.mat');  % 改成你的实际文件名
+file_pattern = fullfile(pwd, 'press_data_*.mat');
+files = dir(file_pattern);
 
-% 初始化特征矩阵和标签
-X = [];  % 特征矩阵
-Y = [];  % 多标签布尔矩阵
+X = [];
+Y = [];
+label_strs = {};  % Temporarily store string labels
 
-% 阈值设定（可根据数据微调）
-delay_thresh = 1.5;       % >1.5s = Delayed
-short_thresh = 0.3;       % <0.3s = TooShort
-long_thresh = 2.0;        % >2.0s = TooLong
-weak_thresh = 104000;     % <X = TooWeak
-strong_thresh = 112000;   % >X = TooStrong
-jitter_thresh = 1000;     % std > X = Jittery（需调）
-
-for i = 1:length(Data)
-    % 特征提取
-    delay = Data(i).delay;
-    duration = Data(i).duration;
-    max_force = Data(i).max_force;
-    std_force = std(Data(i).pressure_curve);
+for f = 1:length(files)
+    filepath = fullfile(pwd, files(f).name);
+    loaded = load(filepath);
     
-    x_i = [delay, duration, max_force, std_force];
-    X = [X; x_i];
-    
-    % 多标签打标（6标签：Delay, Short, Long, Weak, Strong, Jittery）
-    tags = zeros(1,6);
-    if delay > delay_thresh, tags(1) = 1; end
-    if duration < short_thresh, tags(2) = 1; end
-    if duration > long_thresh, tags(3) = 1; end
-    if max_force < weak_thresh, tags(4) = 1; end
-    if max_force > strong_thresh, tags(5) = 1; end
-    if std_force > jitter_thresh, tags(6) = 1; end
+    if isfield(loaded, 'Data')
+        Data = loaded.Data;
+        
+        for i = 1:length(Data)
+            % Feature extraction
+            delay = Data(i).delay;
+            duration = Data(i).duration;
+            max_force = Data(i).max_force;
+            curve = Data(i).pressure_curve;
+            std_force = std(curve);
+            num_peaks = numel(findpeaks(curve));
 
-    Y = [Y; tags];
+            x_i = [delay, duration, max_force, std_force, num_peaks];
+            X = [X; x_i];
+
+            % Collect label strings (e.g., 'M1', 'M2', ...)
+            label_strs{end+1} = Data(i).label;
+        end
+    else
+        warning('Variable "Data" not found in file %s', files(f).name);
+    end
 end
 
-feature_names = {'Delay','Duration','MaxForce','StdForce'};
-tag_names = {'Delayed','TooShort','TooLong','TooWeak','TooStrong','Jittery'};
+% Convert label strings to one-hot encoded matrix
+unique_labels = {'M1','M2','M3','M4','M5','M6','M7'};  % M1 = Normal
+num_classes = numel(unique_labels);
+Y = zeros(length(label_strs), num_classes);
+for i = 1:length(label_strs)
+    idx = find(strcmp(unique_labels, label_strs{i}));
+    Y(i, idx) = 1;
+end
 
-%% Step 2: 训练/测试拆分
+feature_names = {'Delay','Duration','MaxForce','StdForce','NumPeaks'};
+tag_names = unique_labels;
+
+%% Step 2: Train/test split
 cv = cvpartition(size(X,1), 'HoldOut', 0.3);
 XTrain = X(training(cv),:);
 YTrain = Y(training(cv),:);
 XTest  = X(test(cv),:);
 YTest  = Y(test(cv),:);
 
-%% Step 3: 多标签模型训练（简单逻辑回归逐标签）
+%% Step 3: Multi-label model training (one classifier per label using logistic regression)
 models = {};
 for i = 1:size(Y,2)
     models{i} = fitclinear(XTrain, YTrain(:,i), 'Learner', 'logistic');
 end
 
-%% Step 4: 模型预测
+%% Step 4: Model prediction
 Y_pred = zeros(size(YTest));
 for i = 1:length(models)
     Y_pred(:,i) = predict(models{i}, XTest);
 end
 
-%% Step 5: 评估
-fprintf('\n=== Multi-label Evaluation ===\n');
+%% Step 5: Evaluation
+fprintf('\n=== One-hot Multi-class Evaluation (7 labels: M1~M7) ===\n');
 for i = 1:size(Y,2)
     y_true = YTest(:,i);
     y_pred = Y_pred(:,i);
