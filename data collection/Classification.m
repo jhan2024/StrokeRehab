@@ -1,69 +1,55 @@
 %% Step 1: Load data
 clear; clc;
 
-load('press_data_M1_153245.mat');  % 改成你的实际文件名
+data_folder = 'Data';  % <-- change to your actual folder path
+file_list = dir(fullfile(data_folder, '*.mat'));
 
-% 初始化特征矩阵和标签
-X = [];  % 特征矩阵
-Y = [];  % 多标签布尔矩阵
+Data = [];  % Combined Data array
 
-% 阈值设定（可根据数据微调）
-delay_thresh = 1.5;       % >1.5s = Delayed
-short_thresh = 0.3;       % <0.3s = TooShort
-long_thresh = 2.0;        % >2.0s = TooLong
-weak_thresh = 104000;     % <X = TooWeak
-strong_thresh = 112000;   % >X = TooStrong
-jitter_thresh = 1000;     % std > X = Jittery（需调）
-
-for i = 1:length(Data)
-    % 特征提取
-    delay = Data(i).delay;
-    duration = Data(i).duration;
-    max_force = Data(i).max_force;
-    std_force = std(Data(i).pressure_curve);
+for k = 1:length(file_list)
+    file_path = fullfile(data_folder, file_list(k).name);
+    S = load(file_path);
     
-    x_i = [delay, duration, max_force, std_force];
-    X = [X; x_i];
-    
-    % 多标签打标（6标签：Delay, Short, Long, Weak, Strong, Jittery）
-    tags = zeros(1,6);
-    if delay > delay_thresh, tags(1) = 1; end
-    if duration < short_thresh, tags(2) = 1; end
-    if duration > long_thresh, tags(3) = 1; end
-    if max_force < weak_thresh, tags(4) = 1; end
-    if max_force > strong_thresh, tags(5) = 1; end
-    if std_force > jitter_thresh, tags(6) = 1; end
-
-    Y = [Y; tags];
+    if isfield(S, 'Data')
+        Data = [Data; S.Data(:)];  % ensure column vector and concatenate
+    else
+        warning('No "Data" variable found in %s', file_list(k).name);
+    end
 end
 
-feature_names = {'Delay','Duration','MaxForce','StdForce'};
-tag_names = {'Delayed','TooShort','TooLong','TooWeak','TooStrong','Jittery'};
+%% Step 2: Pre-Processing
 
-%% Step 2: 训练/测试拆分
+Data = struct2table(Data);  % T is now a 162×10 table
+
+idx = randperm(size(Data, 1));
+Data = Data(idx, :);
+
+% Drop unwanted columns (e.g., drop columns 1 and 3)
+columns_to_drop = {'trial','cue_time', 'time_series', 'pressure_curve'};  % <== modify as needed
+Data(:, columns_to_drop) = [];
+
+% Step C: Separate features (X) and labels (Y)
+% Assume the last N columns are the multi-labels (e.g., last 5 columns)
+label_column = 'label';  % <-- Replace with your actual label field name
+Y = Data.(label_column);     % This will be a 162×1 categorical or numeric vector
+Y = str2double(erase(Y, 'M'));
+
+Data(:, label_column) = [];  % Now Data only has features
+X = table2array(Data);  % This creates the X matrix
+
+%% Step 3: Train/test split
 cv = cvpartition(size(X,1), 'HoldOut', 0.3);
 XTrain = X(training(cv),:);
 YTrain = Y(training(cv),:);
 XTest  = X(test(cv),:);
 YTest  = Y(test(cv),:);
 
-%% Step 3: 多标签模型训练（简单逻辑回归逐标签）
-models = {};
-for i = 1:size(Y,2)
-    models{i} = fitclinear(XTrain, YTrain(:,i), 'Learner', 'logistic');
-end
+%% Step 3: Multi-label model training (simple logistic regression per label)
+model = fitcecoc(XTrain, YTrain, 'Learner', 'tree');
 
-%% Step 4: 模型预测
-Y_pred = zeros(size(YTest));
-for i = 1:length(models)
-    Y_pred(:,i) = predict(models{i}, XTest);
-end
+%% Step 4: Model prediction
+YPred = predict(model, XTest);
 
-%% Step 5: 评估
-fprintf('\n=== Multi-label Evaluation ===\n');
-for i = 1:size(Y,2)
-    y_true = YTest(:,i);
-    y_pred = Y_pred(:,i);
-    acc = sum(y_true == y_pred) / length(y_true);
-    fprintf('%s: Accuracy = %.2f\n', tag_names{i}, acc);
-end
+%% Step 5: Evaluation
+accuracy = sum(YPred == YTest) / length(YTest);
+fprintf('Accuracy: %.2f%%\n', accuracy * 100);
