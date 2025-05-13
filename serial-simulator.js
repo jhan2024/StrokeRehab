@@ -5,15 +5,121 @@ class SimulatedSerialPort {
         this.simulationInterval = null;
         this.latestValue = null;
         this.basePressure = 101300; // Pa
-        this.pressureRange = 1000;  // Pa (Max pressure offset from base)
+        this.pressureRange = 1000;  // Pa (Max pressure offset from base) - Default/Fallback
         this.noiseMagnitude = 50;   // Pa 
-        this.isIncreasingForce = false; // Flag controlled by events
-        this.forceIncreaseStartTime = 0;
-        this.currentSimulatedForce = 0; // Current force level (0-1)
+
+        // Device Type: '1-dome' or '3-dome'
+        this.deviceType = '1-dome'; // Default to 1-dome
+        this.pressureRanges = [this.pressureRange, this.pressureRange, this.pressureRange]; // ADDED: Array for per-dome ranges
+
+        // State for 1-dome simulation (controlled by spacebar via sim-control event)
+        this.isIncreasingForce1Dome = false;
+        this.forceIncreaseStartTime1Dome = 0;
+        this.currentSimulatedForce1Dome = 0;
+
+        // State for 3-dome simulation (controlled by A, S, D keys directly)
+        this.isIncreasingForce3Dome = [false, false, false]; // For A, S, D
+        this.forceIncreaseStartTime3Dome = [0, 0, 0];
+        this.currentSimulatedForces3Dome = [0, 0, 0]; // Normalized 0-1
+
         this.MAX_FORCE_TIME = 3000; // ms to reach max force
 
-        // Listen for control events from script.js
+        // Listen for control events from script.js (primarily for 1-dome spacebar)
         document.addEventListener('sim-control', this.handleSimControl.bind(this));
+
+        // Direct key listeners for 3-dome mode
+        this._boundKeyDown3Dome = this.handleKeyDown3Dome.bind(this);
+        this._boundKeyUp3Dome = this.handleKeyUp3Dome.bind(this);
+        // Listeners will be added/removed when deviceType changes
+    }
+
+    setDeviceType(type) {
+        if (type === '1-dome' || type === '3-dome') {
+            console.log(`Simulator: Setting device type to ${type}`);
+            this.deviceType = type;
+            // Ensure pressureRanges has appropriate length, re-initialize with default if needed
+            if (type === '1-dome' && this.pressureRanges.length !== 1) {
+                // this.pressureRanges = [this.pressureRanges[0] || this.pressureRange];
+            } else if (type === '3-dome' && this.pressureRanges.length !== 3) {
+                // this.pressureRanges = [
+                //     this.pressureRanges[0] || this.pressureRange,
+                //     this.pressureRanges[1] || this.pressureRange,
+                //     this.pressureRanges[2] || this.pressureRange
+                // ];
+            } // Let setPressureRanges handle the main logic for updating these from InputManager
+
+            if (this.isOpen) { // If already open, re-evaluate listeners
+                this.updateKeyListeners();
+            }
+            // Reset simulation states when type changes
+            this.isIncreasingForce1Dome = false;
+            this.currentSimulatedForce1Dome = 0;
+            this.isIncreasingForce3Dome = [false, false, false];
+            this.currentSimulatedForces3Dome = [0, 0, 0];
+        } else {
+            console.warn(`Simulator: Invalid device type - ${type}`);
+        }
+    }
+
+    updateKeyListeners() {
+        if (this.deviceType === '3-dome' && this.isOpen) {
+            document.addEventListener('keydown', this._boundKeyDown3Dome);
+            document.addEventListener('keyup', this._boundKeyUp3Dome);
+            console.log("Simulator: Added A,S,D key listeners for 3-dome mode.");
+        } else {
+            document.removeEventListener('keydown', this._boundKeyDown3Dome);
+            document.removeEventListener('keyup', this._boundKeyUp3Dome);
+            console.log("Simulator: Removed A,S,D key listeners.");
+        }
+    }
+
+    handleKeyDown3Dome(e) {
+        if (!this.isOpen || this.deviceType !== '3-dome') return;
+        let keyIndex = -1;
+        if (e.key.toLowerCase() === 'a') keyIndex = 0;
+        else if (e.key.toLowerCase() === 's') keyIndex = 1;
+        else if (e.key.toLowerCase() === 'd') keyIndex = 2;
+
+        if (keyIndex !== -1) {
+            e.preventDefault();
+            if (!this.isIncreasingForce3Dome[keyIndex]) {
+                this.isIncreasingForce3Dome[keyIndex] = true;
+                this.forceIncreaseStartTime3Dome[keyIndex] = Date.now();
+            }
+        }
+    }
+
+    handleKeyUp3Dome(e) {
+        if (!this.isOpen || this.deviceType !== '3-dome') return;
+        let keyIndex = -1;
+        if (e.key.toLowerCase() === 'a') keyIndex = 0;
+        else if (e.key.toLowerCase() === 's') keyIndex = 1;
+        else if (e.key.toLowerCase() === 'd') keyIndex = 2;
+
+        if (keyIndex !== -1 && this.isIncreasingForce3Dome[keyIndex]) {
+            e.preventDefault();
+            this.isIncreasingForce3Dome[keyIndex] = false;
+            // Force will naturally decrease in simulation loop
+        }
+    }
+
+    // ADDED: Method to set per-dome pressure ranges
+    setPressureRanges(ranges) {
+        if (Array.isArray(ranges)) {
+            this.pressureRanges = ranges.map(r => (typeof r === 'number' && r > 0 ? r : this.pressureRange));
+            // Ensure it has 3 elements for 3-dome mode, or 1 for 1-dome, padding with the default if necessary
+            if (this.deviceType === '1-dome') {
+                this.pressureRanges = [this.pressureRanges[0] || this.pressureRange];
+            } else { // 3-dome
+                while (this.pressureRanges.length < 3) {
+                    this.pressureRanges.push(this.pressureRange); // Default fallback
+                }
+                this.pressureRanges = this.pressureRanges.slice(0, 3); // Ensure max 3 elements
+            }
+            console.log(`Simulator: Pressure ranges set to:`, this.pressureRanges);
+        } else {
+            console.warn("Simulator: Invalid pressure ranges provided.", ranges);
+        }
     }
 
     async open(options) {
@@ -23,6 +129,7 @@ class SimulatedSerialPort {
             return Promise.resolve();
         }
         this.isOpen = true;
+        this.updateKeyListeners(); // Add/remove A,S,D listeners based on current deviceType
         this.startSimulation(); // Start the interval timer
         return Promise.resolve();
     }
@@ -34,28 +141,33 @@ class SimulatedSerialPort {
              return Promise.resolve();
         }
         this.isOpen = false;
+        this.updateKeyListeners(); // Remove A,S,D listeners
         if (this.simulationInterval) {
             clearInterval(this.simulationInterval);
             this.simulationInterval = null; 
         }
         this.latestValue = null; 
-        this.isIncreasingForce = false; // Reset state on close
-        this.currentSimulatedForce = 0;
+        // Reset states on close
+        this.isIncreasingForce1Dome = false;
+        this.currentSimulatedForce1Dome = 0;
+        this.isIncreasingForce3Dome = [false, false, false];
+        this.currentSimulatedForces3Dome = [0, 0, 0];
         return Promise.resolve();
     }
 
-    // Event handler for simulator control
+    // Event handler for simulator control (primarily for 1-dome spacebar)
     handleSimControl(event) {
-        const { action, duration } = event.detail;
-        // console.log(`Simulator received control event:`, event.detail);
+        if (this.deviceType !== '1-dome') return; // Only apply to 1-dome mode
+
+        const { action } = event.detail;
+        // console.log(`Simulator (1-dome) received control event:`, event.detail);
         if (action === 'start') {
-             if (!this.isIncreasingForce) {
-                this.isIncreasingForce = true;
-                this.forceIncreaseStartTime = Date.now();
+             if (!this.isIncreasingForce1Dome) {
+                this.isIncreasingForce1Dome = true;
+                this.forceIncreaseStartTime1Dome = Date.now();
             }
         } else if (action === 'stop') {
-            this.isIncreasingForce = false;
-            // Optional: use duration for immediate force setting? Currently ignored.
+            this.isIncreasingForce1Dome = false;
         }
     }
 
@@ -69,30 +181,55 @@ class SimulatedSerialPort {
                   this.simulationInterval = null;
                   return;
              }
-            // Update force based on spacebar state (isIncreasingForce flag)
-            if (this.isIncreasingForce) {
-                const holdDuration = Date.now() - this.forceIncreaseStartTime;
-                this.currentSimulatedForce = Math.min(holdDuration / this.MAX_FORCE_TIME, 1);
-            } else {
-                if (this.currentSimulatedForce > 0) {
-                    this.currentSimulatedForce = Math.max(0, this.currentSimulatedForce - 0.05); 
+
+            let outputObject = { normalizedForces: [], rawPressures: [] };
+
+            if (this.deviceType === '1-dome') {
+                // Update 1-dome force based on spacebar state (isIncreasingForce1Dome flag)
+                if (this.isIncreasingForce1Dome) {
+                    const holdDuration = Date.now() - this.forceIncreaseStartTime1Dome;
+                    this.currentSimulatedForce1Dome = Math.min(holdDuration / this.MAX_FORCE_TIME, 1);
+                } else {
+                    if (this.currentSimulatedForce1Dome > 0) {
+                        this.currentSimulatedForce1Dome = Math.max(0, this.currentSimulatedForce1Dome - 0.05); 
+                    }
+                }
+                const currentPressureRange = this.pressureRanges[0] || this.pressureRange;
+                const pressureOffset = this.currentSimulatedForce1Dome * currentPressureRange;
+                const noise = (Math.random() - 0.5) * this.noiseMagnitude;
+                const rawPressure = Math.max(this.basePressure, this.basePressure + pressureOffset + noise);
+                
+                outputObject.normalizedForces.push(this.currentSimulatedForce1Dome);
+                outputObject.rawPressures.push(parseFloat(rawPressure.toFixed(2)));
+
+            } else { // 3-dome
+                for (let i = 0; i < 3; i++) {
+                    if (this.isIncreasingForce3Dome[i]) {
+                        const holdDuration = Date.now() - this.forceIncreaseStartTime3Dome[i];
+                        this.currentSimulatedForces3Dome[i] = Math.min(holdDuration / this.MAX_FORCE_TIME, 1);
+                    } else {
+                        if (this.currentSimulatedForces3Dome[i] > 0) {
+                            this.currentSimulatedForces3Dome[i] = Math.max(0, this.currentSimulatedForces3Dome[i] - 0.05);
+                        }
+                    }
+                    const currentPressureRange = this.pressureRanges[i] || this.pressureRange;
+                    const pressureOffset = this.currentSimulatedForces3Dome[i] * currentPressureRange;
+                    const noise = (Math.random() - 0.5) * this.noiseMagnitude;
+                    const rawPressure = Math.max(this.basePressure, this.basePressure + pressureOffset + noise);
+                    
+                    outputObject.normalizedForces.push(this.currentSimulatedForces3Dome[i]);
+                    outputObject.rawPressures.push(parseFloat(rawPressure.toFixed(2)));
                 }
             }
-            const pressureOffset = this.currentSimulatedForce * this.pressureRange;
-            const noise = (Math.random() - 0.5) * this.noiseMagnitude;
-            const simulatedPressure = Math.max(this.basePressure, this.basePressure + pressureOffset + noise);
-            const dataString = simulatedPressure.toFixed(2) + '\n';
+
+            const dataString = JSON.stringify(outputObject) + '\n';
             this.latestValue = new TextEncoder().encode(dataString);
             
-            // Check if logging is enabled VIA the DOM element (as before)
-            // TODO: Ideally, the simulator shouldn't interact with DOM. 
-            // It could dispatch all data and let a listener decide whether to log.
-            const startLogBtn = document.querySelector('#debugContent .start-log.active'); 
+            const startLogBtn = document.querySelector('#settingsContent .start-log.active'); 
             if (startLogBtn) { 
-                // Dispatch log data instead of writing to DOM
                 const logDetail = {
                     timestamp: new Date().toLocaleTimeString(),
-                    message: `Simulated Pressure: ${simulatedPressure.toFixed(2)} Pa (Force: ${this.currentSimulatedForce.toFixed(2)})`
+                    message: `Simulated Data: ${JSON.stringify(outputObject)}`
                 };
                 document.dispatchEvent(new CustomEvent('logmessage', { detail: logDetail }));
             }

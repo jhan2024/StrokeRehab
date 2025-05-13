@@ -160,10 +160,6 @@ function startRhythmKeysGame() {
     if (rhythmKeysSongTitleElement) rhythmKeysSongTitleElement.textContent = rhythmKeysCurrentSong.title;
     if (rhythmKeysScoreElement) rhythmKeysScoreElement.textContent = rhythmKeysScore;
 
-    // Add keyboard listeners
-    document.addEventListener('keydown', handleRhythmKeysInput);
-    document.addEventListener('keyup', handleRhythmKeysKeyRelease);
-
     // Start the game loop
     if (rhythmKeysAnimationId) cancelAnimationFrame(rhythmKeysAnimationId);
     gameLoopRhythmKeys();
@@ -181,8 +177,8 @@ function stopRhythmKeysGame() {
         backgroundMusic.pause();
     }
     // Remove keyboard listeners
-    document.removeEventListener('keydown', handleRhythmKeysInput);
-    document.removeEventListener('keyup', handleRhythmKeysKeyRelease);
+    // document.removeEventListener('keydown', handleRhythmKeysInput);
+    // document.removeEventListener('keyup', handleRhythmKeysKeyRelease);
 
     // Clear canvas (optional, or show a "Game Over" message)
     if (rhythmKeysCtx && rhythmKeysCanvas) {
@@ -392,50 +388,53 @@ function drawRhythmKeysGame() {
     // rhythmKeysCtx.fillText("Score: " + rhythmKeysScore, 20, 30);
 }
 
-function handleRhythmKeysInput(event) {
-    if (!isRhythmKeysGameActive) return;
-
-    let targetLane = -1;
-    switch (event.key.toLowerCase()) {
-        case 'a': targetLane = 0; break;
-        case 's': targetLane = 1; break;
-        case 'd': targetLane = 2; break;
-        default: return; // Not a game key
-    }
-    event.preventDefault(); // Prevent default browser action for these keys
-
-    // Set the lane as active for visual feedback (key is pressed)
-    if (targetLane !== -1) {
-        rhythmKeysLaneActive[targetLane] = true;
-        // Potentially trigger a softer version of showHitEffect here for just the key press
-        // For now, the hit target drawing will reflect this state.
-    }
-
-    // Check for a hit
-    // Iterate backwards because we might splice
-    for (let i = rhythmKeysActiveNotes.length - 1; i >= 0; i--) {
-        const note = rhythmKeysActiveNotes[i];
-        if (note.lane === targetLane) {
-            // Check if note is within the hit zone tolerance
-            const noteBottom = note.y + RHYTHM_KEYS_NOTE_HEIGHT;
-            const hitZoneTop = RHYTHM_KEYS_HIT_ZONE_Y - RHYTHM_KEYS_NOTE_HEIGHT; // More generous top tolerance
-            const hitZoneBottom = RHYTHM_KEYS_HIT_ZONE_Y + RHYTHM_KEYS_NOTE_HEIGHT / 2; // Bottom tolerance
-
-            if (noteBottom >= hitZoneTop && note.y <= hitZoneBottom) {
-                console.log("Rhythm Keys: Hit in lane " + targetLane + "!");
-                rhythmKeysScore += 10;
-                if (rhythmKeysScoreElement) rhythmKeysScoreElement.textContent = rhythmKeysScore;
-                rhythmKeysActiveNotes.splice(i, 1); // Remove hit note
-
-                playNoteSound(targetLane);
-                showHitEffect(targetLane);
-                // Potentially add combo logic here
-                return; // Process only one note per key press per lane
-            }
+// NEW function to be called by game_control.js
+window.rhythmGameProcessInputs = function(forcesArray, threshold) {
+    if (!isRhythmKeysGameActive || !Array.isArray(forcesArray) || forcesArray.length < RHYTHM_KEYS_NUM_LANES) {
+        // If game not active or forcesArray is malformed, ensure all lanes are inactive
+        for (let i = 0; i < RHYTHM_KEYS_NUM_LANES; i++) {
+            rhythmKeysLaneActive[i] = false;
         }
+        return;
     }
-    // console.log("Rhythm Keys: Missed or no note in lane " + targetLane);
-}
+
+    for (let i = 0; i < RHYTHM_KEYS_NUM_LANES; i++) {
+        const forceForLane = forcesArray[i];
+        const laneIsNowActive = forceForLane >= threshold;
+
+        // Update visual state of the lane
+        rhythmKeysLaneActive[i] = laneIsNowActive;
+
+        if (laneIsNowActive) {
+            // Check for a hit only if the lane is currently active due to force
+            // Iterate backwards because we might splice
+            for (let noteIdx = rhythmKeysActiveNotes.length - 1; noteIdx >= 0; noteIdx--) {
+                const note = rhythmKeysActiveNotes[noteIdx];
+                if (note.lane === i) { // Check if the note is in the current lane
+                    // Check if note is within the hit zone tolerance
+                    const noteBottom = note.y + RHYTHM_KEYS_NOTE_HEIGHT; // Using constant note height
+                    const hitZoneTop = RHYTHM_KEYS_HIT_ZONE_Y - RHYTHM_KEYS_NOTE_HEIGHT; // Generous top tolerance
+                    const hitZoneBottom = RHYTHM_KEYS_HIT_ZONE_Y + RHYTHM_KEYS_NOTE_HEIGHT / 2; // Bottom tolerance
+
+                    if (noteBottom >= hitZoneTop && note.y <= hitZoneBottom) {
+                        console.log("Rhythm Keys: Hit in lane " + i + " by force!");
+                        rhythmKeysScore += 10;
+                        if (rhythmKeysScoreElement) rhythmKeysScoreElement.textContent = rhythmKeysScore;
+                        rhythmKeysActiveNotes.splice(noteIdx, 1); // Remove hit note
+
+                        playNoteSound(i);
+                        showHitEffect(i); // This might need adjustment: differentiate sustained hold vs. successful hit
+                        // For now, any force above threshold that overlaps a note is a hit.
+                        // More advanced logic could check for the *rising edge* of the force or a peak.
+                        break; // Process only one note per lane per frame if multiple overlap (unlikely with good chart)
+                    }
+                }
+            }
+        } 
+        // If !laneIsNowActive, rhythmKeysLaneActive[i] is already false from above,
+        // so the visual representation will be inactive.
+    }
+};
 
 function playNoteSound(laneIndex) {
     if (!audioContext || laneIndex < 0 || laneIndex >= noteHitSamples.length) {
@@ -508,21 +507,6 @@ function showHitEffect(laneIndex) {
 
         // The successful hit flash is still frame-dependent. 
         // For a longer visible flash, manage its state over multiple frames.
-    }
-}
-
-// Add a key release handler to deactivate the lane highlight
-function handleRhythmKeysKeyRelease(event) {
-    if (!isRhythmKeysGameActive) return;
-    let targetLane = -1;
-    switch (event.key.toLowerCase()) {
-        case 'a': targetLane = 0; break;
-        case 's': targetLane = 1; break;
-        case 'd': targetLane = 2; break;
-        default: return;
-    }
-    if (targetLane !== -1) {
-        rhythmKeysLaneActive[targetLane] = false;
     }
 }
 

@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="flappybird/css/main.css">
     <!-- Space Shooter CSS -->
     <link rel="stylesheet" href="spaceshooter/css/spaceshooter.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -23,14 +25,34 @@
             
             <div class="control-section">
                 <h3>Touch Visualization</h3>
+                <!-- REMOVED Touch Display and Canvas -->
+                <!-- 
                 <div class="touch-display">
-                    <!-- Canvas for touch point visualization with elliptical ball -->
                     <canvas id="touchCanvas" width="200" height="200"></canvas>
                 </div>
-                <div class="force-levels">
-                    <div class="force-bar">
-                        <div class="force-level" style="height: 60%;"></div>
-                        <div class="force-label">Force</div>
+                -->
+                <div class="force-levels" id="force-levels-container">
+                    <!-- Force bars will be dynamically added/updated here by script.js -->
+                    <!-- Example for one bar (to be managed by JS) -->
+                    <div class="force-bar-wrapper" id="force-bar-wrapper-0">
+                        <div class="force-bar">
+                            <div class="force-level" style="height: 0%;"></div>
+                        </div>
+                        <div class="force-label">Force 1</div> <!-- Label can be updated by JS -->
+                    </div>
+                     <!-- Placeholder for Force Bar 2 (hidden by default, managed by JS) -->
+                    <div class="force-bar-wrapper" id="force-bar-wrapper-1" style="display: none;">
+                        <div class="force-bar">
+                            <div class="force-level" style="height: 0%;"></div>
+                        </div>
+                        <div class="force-label">Force 2</div>
+                    </div>
+                    <!-- Placeholder for Force Bar 3 (hidden by default, managed by JS) -->
+                    <div class="force-bar-wrapper" id="force-bar-wrapper-2" style="display: none;">
+                        <div class="force-bar">
+                            <div class="force-level" style="height: 0%;"></div>
+                        </div>
+                        <div class="force-label">Force 3</div>
                     </div>
                 </div>
             </div>
@@ -55,7 +77,7 @@
             <div class="tabs">
                 <button class="tab-btn active" data-tab="exercises">Gamified Exercises</button>
                 <button class="tab-btn" data-tab="measurement">Measurement</button>
-                <button class="tab-btn" data-tab="debug">Debug</button>
+                <button class="tab-btn" data-tab="settings">Settings</button>
             </div>
             
             <!-- Exercises Tab Content -->
@@ -212,12 +234,21 @@
             </div>
             
             <!-- Debug Tab Content -->
-            <div class="tab-content" id="debugContent">
-                <h2>Arduino Debug</h2>
+            <div class="tab-content" id="settingsContent">
+                <h2>Device Settings</h2>
                 <div class="debug-container">
                     <div class="connection-status">
                         <h3>Connection Status</h3>
                         <div class="debug-status-indicator disconnected">Disconnected</div>
+                        <div class="device-type-selector" style="margin-bottom: 10px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Device Type:</label>
+                            <label for="deviceType1Dome" style="margin-right: 10px;">
+                                <input type="radio" id="deviceType1Dome" name="deviceType" value="1-dome" checked> 1-Dome
+                            </label>
+                            <label for="deviceType3Dome">
+                                <input type="radio" id="deviceType3Dome" name="deviceType" value="3-dome"> 3-Dome
+                            </label>
+                        </div>
                         <div class="connection-controls">
                             <button class="connect-btn">Connect to Arduino</button>
                             <button class="simulation-toggle">Use Simulation</button>
@@ -237,25 +268,62 @@
                     </div>
                     <div class="sensor-readings">
                         <h3>Live Sensor Readings</h3>
-                        <div class="sensor-grid">
-                            <div class="sensor-reading">
-                                <span class="sensor-label">Pressure:</span>
-                                <span class="sensor-value" id="pressureValue">0.00</span>
+                        <div class="sensor-grid" id="sensor-grid-debug">
+                            <!-- Sensor 1 Data -->
+                            <div class="sensor-reading-group" id="sensor-group-0">
+                                <div class="sensor-reading">
+                                    <span class="sensor-label">Pressure 1 (Pa):</span>
+                                    <span class="sensor-value" id="pressureValue0">0.00</span>
+                                </div>
+                                <div class="sensor-reading">
+                                    <span class="sensor-label">Norm. Force 1:</span>
+                                    <span class="sensor-value" id="normalizedForceValue0">0.000</span>
+                                </div>
                             </div>
-                            <div class="sensor-reading">
-                                <span class="sensor-label">Raw:</span>
-                                <span class="sensor-value" id="rawValue">0</span>
+                            <!-- Sensor 2 Data (hidden by default) -->
+                            <div class="sensor-reading-group" id="sensor-group-1" style="display: none;">
+                                <div class="sensor-reading">
+                                    <span class="sensor-label">Pressure 2 (Pa):</span>
+                                    <span class="sensor-value" id="pressureValue1">0.00</span>
+                                </div>
+                                <div class="sensor-reading">
+                                    <span class="sensor-label">Norm. Force 2:</span>
+                                    <span class="sensor-value" id="normalizedForceValue1">0.000</span>
+                                </div>
                             </div>
-                            <div class="sensor-reading">
-                                <span class="sensor-label">Last Update:</span>
-                                <span class="sensor-value" id="lastUpdate">--:--:--</span>
+                            <!-- Sensor 3 Data (hidden by default) -->
+                            <div class="sensor-reading-group" id="sensor-group-2" style="display: none;">
+                                <div class="sensor-reading">
+                                    <span class="sensor-label">Pressure 3 (Pa):</span>
+                                    <span class="sensor-value" id="pressureValue2">0.00</span>
+                                </div>
+                                <div class="sensor-reading">
+                                    <span class="sensor-label">Norm. Force 3:</span>
+                                    <span class="sensor-value" id="normalizedForceValue2">0.000</span>
+                                </div>
+                            </div>
+                            <!-- Shared Last Update -->
+                            <div class="sensor-reading-group" id="sensor-group-last-update">
+                                <div class="sensor-reading">
+                                    <span class="sensor-label">Last Update:</span>
+                                    <span class="sensor-value" id="lastUpdate">--:--:--</span>
+                                </div>
                             </div>
                         </div>
                         <div class="calibration-controls" style="margin-top: 15px;">
                             <button class="log-btn" id="calibrateZeroBtn" style="margin-bottom: 10px;">Calibrate Zero Pressure</button>
-                            <div class="setting-item" style="display: flex; align-items: center; gap: 10px;">
-                                <label for="pressureRangeInput" style="margin-bottom: 0;">Pressure Range:</label>
-                                <input type="number" id="pressureRangeInput" value="5000" style="flex-grow: 1; padding: 5px;">
+                            <!-- Pressure Range Inputs -->
+                            <div class="setting-item pressure-range-setting" id="pressure-range-group-0">
+                                <label for="pressureRangeInput0" style="margin-bottom: 0;">Pressure Range 1 (Pa):</label>
+                                <input type="number" id="pressureRangeInput0" value="5000" style="flex-grow: 1; padding: 5px;">
+                            </div>
+                            <div class="setting-item pressure-range-setting" id="pressure-range-group-1" style="display: none;">
+                                <label for="pressureRangeInput1" style="margin-bottom: 0;">Pressure Range 2 (Pa):</label>
+                                <input type="number" id="pressureRangeInput1" value="5000" style="flex-grow: 1; padding: 5px;">
+                            </div>
+                            <div class="setting-item pressure-range-setting" id="pressure-range-group-2" style="display: none;">
+                                <label for="pressureRangeInput2" style="margin-bottom: 0;">Pressure Range 3 (Pa):</label>
+                                <input type="number" id="pressureRangeInput2" value="5000" style="flex-grow: 1; padding: 5px;">
                             </div>
                         </div>
                     </div>
@@ -274,7 +342,13 @@
     <script src="rhythmkeys/js/rhythmkeys.js"></script>
     
     <!-- Main Scripts -->
+    <script src="constants.js"></script>
     <script src="serial-simulator.js"></script>
+    <script src="sensor_interface.js"></script>
+    <script src="input_mode_manager.js"></script>
+    <script src="measurement_manager.js"></script>
+    <script src="settings_manager.js"></script>
+    <script src="game_control.js"></script>
     <script src="script.js"></script>
     <script src="img-placeholders.js"></script>
 </body>
