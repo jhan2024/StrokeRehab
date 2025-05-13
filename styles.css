@@ -721,4 +721,31 @@ body {
 
 #pool-score-display, #pool-controls-help {
     margin-bottom: 5px;
+}
+
+/* Rhythm Keys Game Container Styles */
+#rhythmKeysGame {
+    position: absolute; /* Or fixed, depending on desired behavior */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85); /* Darker overlay */
+    z-index: 1000; /* Ensure it's above other content */
+    display: flex; /* Use flex for centering */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#rhythm-keys-container {
+    background-color: #1a1a1a; /* Dark background for the game itself */
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+}
+
+#rhythmKeysCanvas {
+    background-color: #000; /* Black canvas background */
+    border-radius: 4px;
 } 

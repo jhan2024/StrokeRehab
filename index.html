@@ -98,6 +98,12 @@
                         <p>Direction + Force control</p>
                         <button class="play-btn" id="playPoolGame">Play</button>
                     </div>
+                    <div class="game-card" id="rhythmKeysCard">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%239b59b6'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🎹%3C/text%3E%3C/svg%3E" alt="Rhythm Keys Game">
+                        <h3>Rhythm Keys</h3>
+                        <p>Match notes with A, S, D keys</p>
+                        <button class="play-btn" id="playRhythmKeys">Play</button>
+                    </div>
                 </div>
                 
                 <!-- Flappy Bird Game Container -->
@@ -159,6 +165,18 @@
                             <div id="pool-controls-help">
                                 <p>Use mouse to aim, force input determines shot power</p>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rhythm Keys Game Container -->
+                <div id="rhythmKeysGame" style="display: none;">
+                    <button id="closeRhythmKeys" class="close-game-btn">Close Game</button>
+                    <div id="rhythm-keys-container" style="text-align: center; position: relative;">
+                        <canvas id="rhythmKeysCanvas" width="600" height="700"></canvas>
+                        <div id="rhythm-keys-ui" style="position: absolute; top: 10px; left: 10px; color: white; background-color: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;">
+                            <div>Score: <span id="rhythmKeysScore">0</span></div>
+                            <div>Song: <span id="rhythmKeysSongTitle">N/A</span></div>
                         </div>
                     </div>
                 </div>
@@ -253,6 +271,7 @@
     <script src="flappybird/js/flappybird.js"></script>
     <script src="spaceshooter/js/spaceshooter.js"></script>
     <script src="poolgame/js/poolgame.js"></script>
+    <script src="rhythmkeys/js/rhythmkeys.js"></script>
     
     <!-- Main Scripts -->
     <script src="serial-simulator.js"></script>

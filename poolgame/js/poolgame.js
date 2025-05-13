@@ -1,6 +1,7 @@
 (function() {
     /*
        Pool Game for Hand Rehabilitation
+       Adapted from https://github.com/a-j-z/pool 
        
        A simple 8-ball pool game adapted for rehabilitation devices with force input sensors.
        

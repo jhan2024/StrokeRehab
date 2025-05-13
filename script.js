@@ -531,6 +531,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const playFlappyBtn = document.getElementById('playFlappyBird');
     const closeGameBtn = document.getElementById('closeFlappyBird');
     const gameContainer = document.getElementById('flappyBirdGame');
+    const playRhythmKeysBtn = document.getElementById('playRhythmKeys');
+    const closeRhythmKeysBtn = document.getElementById('closeRhythmKeys');
+    const rhythmKeysContainer = document.getElementById('rhythmKeysGame');
     let debugElements = {}; // Cache debug tab elements
 
     // --- Event Listeners ---
@@ -949,6 +952,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Flappy Bird Game Integration (Event Listener Based) ---
     let isGameControlActive = false; // Flag to enable/disable game control
 
+    // ---> ADDED: Rhythm Keys active flag (for consistency, game manages its own state) <---
+    let isRhythmKeysGameUIShown = false; // Tracks if the UI overlay is shown
+
     // Play Button Setup
     if (playFlappyBtn && gameContainer) {
         playFlappyBtn.addEventListener('click', function() {
@@ -1050,6 +1056,37 @@ document.addEventListener('DOMContentLoaded', function() {
             // Stop the game
             if (typeof window.stopPoolGame === 'function') {
                 window.stopPoolGame();
+            }
+        });
+    }
+
+    // --- Rhythm Keys Game Integration ---
+    if (playRhythmKeysBtn && rhythmKeysContainer) {
+        playRhythmKeysBtn.addEventListener('click', function() {
+            if (typeof window.initRhythmKeys === 'function' && !rhythmKeysCanvas) {
+                 // Ensure game is initialized if script.js loaded faster or DOMContentLoaded for rhythmkeys.js was delayed
+                window.initRhythmKeys(); 
+            }
+            if (typeof window.startRhythmKeysGame === 'function') {
+                rhythmKeysContainer.style.display = 'flex'; // Show the game overlay
+                isRhythmKeysGameUIShown = true;
+                window.startRhythmKeysGame(); 
+                console.log("Rhythm Keys game started from script.js");
+            } else {
+                console.error("startRhythmKeysGame function not found!");
+            }
+        });
+    }
+
+    if (closeRhythmKeysBtn && rhythmKeysContainer) {
+        closeRhythmKeysBtn.addEventListener('click', function() {
+            if (typeof window.stopRhythmKeysGame === 'function') {
+                window.stopRhythmKeysGame();
+                rhythmKeysContainer.style.display = 'none'; // Hide the game overlay
+                isRhythmKeysGameUIShown = false;
+                console.log("Rhythm Keys game stopped from script.js");
+            } else {
+                console.error("stopRhythmKeysGame function not found!");
             }
         });
     }
