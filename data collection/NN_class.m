@@ -18,21 +18,17 @@ for k = 1:length(file_list)
 end
 
 %% Step 2: Pre-Processing
-
 Data = struct2table(Data);  % T is now a 162×10 table
-
-idx = randperm(size(Data, 1));
+idx = randperm(size(Data, 1)); % randomize them
 Data = Data(idx, :);
 
 % Drop unwanted columns (e.g., drop columns 1 and 3)
-columns_to_drop = {'trial','cue_time'};  % <== modify as needed
+columns_to_drop = {'trial','cue_time','time_series', 'pressure_curve'};  % <== modify as needed
 Data(:, columns_to_drop) = [];
 
 % Step C: Separate features (X) and labels (Y)
-% Assume the last N columns are the multi-labels (e.g., last 5 columns)
 label_column = 'label';  % <-- Replace with your actual label field name
 Y = Data.(label_column);     % This will be a 162×1 categorical or numeric vector
-Y = str2double(erase(Y, 'M'));
 Y = categorical(Y);
 
 Data(:, label_column) = [];  % Now Data only has features
@@ -50,10 +46,15 @@ YTest  = Y(test(cv),:);
 % Define layers
 layers = [
     featureInputLayer(size(XTrain, 2))
-    fullyConnectedLayer(20)
+    fullyConnectedLayer(128)
     reluLayer
-    fullyConnectedLayer(20)
+    dropoutLayer(0.3)
+    fullyConnectedLayer(64)
     reluLayer
+    dropoutLayer(0.3)
+    fullyConnectedLayer(32)
+    reluLayer
+    dropoutLayer(0.3)
     fullyConnectedLayer(7)   % 7 classes
     softmaxLayer
     classificationLayer

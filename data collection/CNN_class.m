@@ -18,26 +18,37 @@ for k = 1:length(file_list)
 end
 
 %% Step 2: Pre-Processing
-
 Data = struct2table(Data);  % T is now a 162×10 table
-
-idx = randperm(size(Data, 1));
+idx = randperm(size(Data, 1)); % randomize them
 Data = Data(idx, :);
 
 % Drop unwanted columns (e.g., drop columns 1 and 3)
 columns_to_drop = {'trial','cue_time'};  % <== modify as needed
 Data(:, columns_to_drop) = [];
 
+% Define the columns we want to separate
+columns_to_separate = {'time_series', 'pressure_curve'};
+SeriesData = Data(:, columns_to_separate); % Separate those columns into a new table
+
+% Keep the rest of the data in the original table
+Data(:, columns_to_separate) = [];
+
 % Step C: Separate features (X) and labels (Y)
-% Assume the last N columns are the multi-labels (e.g., last 5 columns)
 label_column = 'label';  % <-- Replace with your actual label field name
 Y = Data.(label_column);     % This will be a 162×1 categorical or numeric vector
-Y = str2double(erase(Y, 'M'));
 Y = categorical(Y);
 
 Data(:, label_column) = [];  % Now Data only has features
 X = table2array(Data);  % This creates the X matrix
 X = normalize(X);
+
+% Prepare the Series Data
+timeSeries = SeriesData.time_series;      % Cell array: {1xN} sequences
+pressureSeries = SeriesData.pressure_curve;   % Cell array: {1xN} sequences
+
+maxLen = max(cellfun(@length, [timeSeries; pressureSeries]));  % max length among all sequences in both columns
+timeSeries_padded = cellfun(@(x) padarray(x, [0, maxLen - length(x)], 0, 'post'), timeSeries, 'UniformOutput', false);
+pressureSeries_padded = cellfun(@(x) padarray(x, [0, maxLen - length(x)], 0, 'post'), pressureSeries, 'UniformOutput', false);
 
 %% Step 3: Train/test split
 cv = cvpartition(size(X,1), 'HoldOut', 0.3);
@@ -50,14 +61,22 @@ YTest  = Y(test(cv),:);
 % Define layers
 layers = [
     featureInputLayer(size(XTrain, 2))
-    fullyConnectedLayer(20)
+    fullyConnectedLayer(128)
     reluLayer
-    fullyConnectedLayer(20)
+    dropoutLayer(0.3)
+    fullyConnectedLayer(64)
     reluLayer
+    dropoutLayer(0.3)
+    fullyConnectedLayer(32)
+    reluLayer
+    dropoutLayer(0.3)
     fullyConnectedLayer(7)   % 7 classes
     softmaxLayer
     classificationLayer
 ];
+
+%Xsmall = XTrain(1:10,:);
+%Ysmall = YTrain(1:10);
 
 % Train options
 options = trainingOptions('adam', ...
@@ -65,7 +84,9 @@ options = trainingOptions('adam', ...
     'Verbose', true, ...
     'Plots', 'training-progress');
 
+%net = trainNetwork(Xsmall, Ysmall, layers, options);
 net = trainNetwork(XTrain, YTrain, layers, options);
+
 
 %% Step 4: Model prediction
 YPred = classify(net, XTest);
