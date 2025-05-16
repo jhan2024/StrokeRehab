@@ -66,7 +66,23 @@ sequenceDataCNN = permute(sequenceData, [1, 2, 4, 3]);  % Shape: [2, maxLen, 1, 
 % CNN layer
 seqInputSize = [2 maxLen];  % 2 rows (features), maxLen columns (time steps)
 
-seqLayer = [
+seqLayers = [
+    imageInputLayer(seqInputSize, 'Name','sequence_input','Normalization','none')
+
+    convolution2dLayer([2 5], 16, 'Stride', [1 1], 'Padding','same', 'Name','conv1')
+    batchNormalizationLayer('Name','bn1')
+    reluLayer('Name','relu1')
+
+    maxPooling2dLayer([1 2], 'Stride', [1 2], 'Name','pool1')
+
+    convolution2dLayer([1 5], 32, 'Padding','same', 'Name','conv2')
+    batchNormalizationLayer('Name','bn2')
+    reluLayer('Name','relu2')
+
+    flattenLayer('Name','flatten')  % <-- this ensures CNN output is 2D
+];
+
+seqLayers2 = [
     imageInputLayer(seqInputSize, 'Name','sequence_input','Normalization','none')
 
     convolution2dLayer([2 5], 16, 'Stride', [1 1], 'Padding','same', 'Name','conv1')
@@ -86,6 +102,28 @@ seqLayer = [
     classificationLayer('Name','output')
 ];
 
+metaInput = featureInputLayer(size(X,2), 'Name','meta_input');
+
+combinedLayers = [
+    concatenationLayer(1,2,'Name','concat')
+    fullyConnectedLayer(64)
+    reluLayer
+    fullyConnectedLayer(7)
+    softmaxLayer
+    classificationLayer
+];
+
+lgraph = layerGraph();
+
+% Add layers
+lgraph = addLayers(lgraph, seqLayers);
+lgraph = addLayers(lgraph, metaInput);
+lgraph = addLayers(lgraph, combinedLayers);
+
+% Connect branches
+lgraph = connectLayers(lgraph, 'meta_input', 'concat/in2');  % metadata
+lgraph = connectLayers(lgraph, 'flatten', 'concat/in1');  % CNN path
+
 %% Step 3: Train/test split
 cv = cvpartition(size(X,1), 'HoldOut', 0.3);
 
@@ -93,14 +131,15 @@ XTrain = X(training(cv),:);
 YTrain = Y(training(cv),:);
 XTest  = X(test(cv),:);
 YTest  = Y(test(cv),:);
-seqTrain = sequenceDataCNN(:,:,:,training(cv));  % Keep same order
-seqTest  = sequenceDataCNN(:,:,:,test(cv));
+seqTrain = sequenceData(:,:,training(cv));  % Keep same order
+seqTest  = sequenceData(:,:,test(cv));
 
 %% TRAIN
 
 % Training options
 options = trainingOptions('adam', ...
-    'MaxEpochs', 50, ...
+    'MaxEpochs', 100, ...
+    'MiniBatchSize', 32, ...
     'Shuffle','every-epoch', ...
     'Verbose',true, ...
     'Plots','training-progress');
@@ -108,7 +147,7 @@ options = trainingOptions('adam', ...
 fprintf("Size check: seqTrain=%d, XTrain=%d, YTrain=%d\n", size(seqTrain,3), size(XTrain,1), numel(YTrain));
 
 % Train network
-net = trainNetwork(seqTrain, YTrain, seqLayer, options);
+net = trainNetwork(seqTrain, YTrain, seqLayers2, options);
 
 %% Step 4: Model prediction
 YPred = classify(net, seqTest);
