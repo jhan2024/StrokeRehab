@@ -61,6 +61,7 @@ var position = 180;
 var rotation = 0;
 var jump = gameSettings.jump;
 var flyArea = null;
+var currentAppliedForce = 0; // ADDED: To store force for gravity mode
 
 var score = 0;
 
@@ -364,6 +365,7 @@ function showSplash() {
    score = 0;
    currentObstaclePipe = null; // Reset active pipe
    passedPipe = null; // Reset passed pipe
+   currentAppliedForce = 0; // Reset applied force for gravity mode
    
    // Update the player in preparation for the next game
    $("#player").css({ y: 0, x: 0 });
@@ -470,8 +472,8 @@ function gameloop() {
    
    // --- Update Velocity based on Control Mode ---
    if (controlMode === 'gravity') {
-        // Use the global force value (updated by script.js)
-        const currentForce = window.latestNormalizedForce || 0; 
+        // Use the currentAppliedForce (updated by flappyBirdProcessForce)
+        const currentForce = currentAppliedForce || 0; 
         // Force counters gravity. Higher force means less downward acceleration (or even upward if forceInfluenceFactor is strong enough)
         velocity += gravity + (currentForce * gameSettings.forceInfluenceFactor); 
         // Optional: Add a cap to upward velocity from force?
@@ -484,7 +486,7 @@ function gameloop() {
    position += velocity;
    
    // Update the player position
-   updatePlayer(player, controlMode === 'gravity' ? (window.latestNormalizedForce || 0) : velocity); // Pass force or velocity for rotation logic
+   updatePlayer(player, controlMode === 'gravity' ? (currentAppliedForce || 0) : velocity); // Pass force or velocity for rotation logic
    
    // --- Simplified and More Reliable Bounding Box --- 
    // Directly use the axis-aligned bounding box provided by the browser for the rotated element.
@@ -900,5 +902,12 @@ $(document).ready(function() {
     `)
     .appendTo('head');
 }); 
+
+// NEW: Function to process force input from game_control.js for gravity mode
+window.flappyBirdProcessForce = function(forceValue) {
+    // Store the force, it will be used by the gameloop if in gravity mode
+    currentAppliedForce = (isNaN(forceValue) ? 0 : forceValue);
+    // No need to check currentstate here, gameloop will only use it if relevant
+};
 
 })(); // End IIFE 

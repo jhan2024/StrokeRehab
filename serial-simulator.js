@@ -22,7 +22,7 @@ class SimulatedSerialPort {
         this.forceIncreaseStartTime3Dome = [0, 0, 0];
         this.currentSimulatedForces3Dome = [0, 0, 0]; // Normalized 0-1
 
-        this.MAX_FORCE_TIME = 3000; // ms to reach max force
+        this.MAX_FORCE_TIME = 500; // ms to reach max force
 
         // Listen for control events from script.js (primarily for 1-dome spacebar)
         document.addEventListener('sim-control', this.handleSimControl.bind(this));
@@ -182,16 +182,18 @@ class SimulatedSerialPort {
                   return;
              }
 
-            let outputObject = { normalizedForces: [], rawPressures: [] };
+            // Initialize outputObject differently based on deviceType
+            let outputObject;
 
             if (this.deviceType === '1-dome') {
+                outputObject = { normalizedForces: [], rawPressures: [] };
                 // Update 1-dome force based on spacebar state (isIncreasingForce1Dome flag)
                 if (this.isIncreasingForce1Dome) {
                     const holdDuration = Date.now() - this.forceIncreaseStartTime1Dome;
                     this.currentSimulatedForce1Dome = Math.min(holdDuration / this.MAX_FORCE_TIME, 1);
                 } else {
                     if (this.currentSimulatedForce1Dome > 0) {
-                        this.currentSimulatedForce1Dome = Math.max(0, this.currentSimulatedForce1Dome - 0.05); 
+                        this.currentSimulatedForce1Dome = Math.max(0, this.currentSimulatedForce1Dome - 0.07);
                     }
                 }
                 const currentPressureRange = this.pressureRanges[0] || this.pressureRange;
@@ -203,22 +205,27 @@ class SimulatedSerialPort {
                 outputObject.rawPressures.push(parseFloat(rawPressure.toFixed(2)));
 
             } else { // 3-dome
+                outputObject = { timestamp: Date.now(), pressure: [] }; // New format for 3-dome
+                // We still need to calculate currentSimulatedForces3Dome for internal logic if any part depends on it, 
+                // but it won't be part of the primary output object for this format.
+
                 for (let i = 0; i < 3; i++) {
                     if (this.isIncreasingForce3Dome[i]) {
                         const holdDuration = Date.now() - this.forceIncreaseStartTime3Dome[i];
                         this.currentSimulatedForces3Dome[i] = Math.min(holdDuration / this.MAX_FORCE_TIME, 1);
                     } else {
                         if (this.currentSimulatedForces3Dome[i] > 0) {
-                            this.currentSimulatedForces3Dome[i] = Math.max(0, this.currentSimulatedForces3Dome[i] - 0.05);
+                            this.currentSimulatedForces3Dome[i] = Math.max(0, this.currentSimulatedForces3Dome[i] - 0.07);
                         }
                     }
                     const currentPressureRange = this.pressureRanges[i] || this.pressureRange;
+                    // Use currentSimulatedForces3Dome[i] to calculate the pressureOffset for rawPressure
                     const pressureOffset = this.currentSimulatedForces3Dome[i] * currentPressureRange;
                     const noise = (Math.random() - 0.5) * this.noiseMagnitude;
                     const rawPressure = Math.max(this.basePressure, this.basePressure + pressureOffset + noise);
                     
-                    outputObject.normalizedForces.push(this.currentSimulatedForces3Dome[i]);
-                    outputObject.rawPressures.push(parseFloat(rawPressure.toFixed(2)));
+                    // outputObject.normalizedForces.push(this.currentSimulatedForces3Dome[i]); // REMOVED for new format
+                    outputObject.pressure.push(parseFloat(rawPressure.toFixed(2))); // ADDED for new format
                 }
             }
 
@@ -233,7 +240,7 @@ class SimulatedSerialPort {
                 };
                 document.dispatchEvent(new CustomEvent('logmessage', { detail: logDetail }));
             }
-        }, 50); 
+        }, 20); 
     }
 
     // Simulated readable stream

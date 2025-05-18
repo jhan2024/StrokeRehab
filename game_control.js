@@ -46,26 +46,44 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const firstForce = forces[0]; // For 1-input games
 
-        // Flappy Bird Control (uses first force)
-        if (isGameControlActive && typeof window.flappyGameJump === 'function') {
-            if (firstForce >= GAME_FORCE_THRESHOLD) {
-                // console.log(`Flappy Bird Jump Triggered by force: ${firstForce.toFixed(3)}`);
+        // Flappy Bird Control
+        if (isGameControlActive) {
+            if (typeof window.flappyGameJump === 'function' && firstForce >= GAME_FORCE_THRESHOLD) {
+                // This handles the jump action for 'jump' mode and can also start the game.
                 window.flappyGameJump();
+            }
+            // Always send the raw force if the processing function exists.
+            // Flappy Bird's 'gravity' mode will use this.
+            if (typeof window.flappyBirdProcessForce === 'function') {
+                window.flappyBirdProcessForce(firstForce);
             }
         }
 
-        // Space Shooter Control (uses first force for vertical movement)
-        if (isSpaceShooterActive && typeof window.updateSpaceShooterPlayer === 'function') {
-            // The space shooter might take the force directly for positioning,
-            // rather than a threshold for an action like jump.
-            // Example: window.updateSpaceShooterPlayer(firstForce);
-            // For now, let's assume its internal logic (if any for force) handles window.latestNormalizedForces.
+        // Space Shooter Control
+        if (isSpaceShooterActive && typeof window.spaceShooterProcessForce === 'function') {
+            window.spaceShooterProcessForce(firstForce);
+        } else if (isSpaceShooterActive) {
+            // console.warn("window.spaceShooterProcessForce function not found!");
         }
 
-        // Pool Game Control (uses first force for power)
-        if (isPoolGameActive && typeof window.setPoolShotPower === 'function') {
-            // Example: window.setPoolShotPower(firstForce);
-            // For now, let's assume its internal logic handles window.latestNormalizedForces.
+        // Pool Game Control - REVISED
+        if (isPoolGameActive && typeof window.poolGameProcessInputs === 'function') {
+            if (deviceType === '3-dome') {
+                if (forces.length >= 3) {
+                    window.poolGameProcessInputs(forces.slice(0, 3));
+                } else {
+                    // Pad if not enough forces, though typically there should be 3 for 3-dome
+                    const paddedForces = [forces[0] || 0, forces[1] || 0, forces[2] || 0];
+                    window.poolGameProcessInputs(paddedForces);
+                }
+            } else if (deviceType === '1-dome') {
+                // For 1-dome, map the single force to the strike input (index 2).
+                // Aiming inputs (index 0 and 1) will be 0, meaning no force-based aim adjustment.
+                const singleInputForces = [0, 0, firstForce];
+                window.poolGameProcessInputs(singleInputForces);
+            }
+        } else if (isPoolGameActive) {
+            // console.warn("window.poolGameProcessInputs function not found for Pool Game!");
         }
 
         // Rhythm Keys Control

@@ -21,13 +21,16 @@
         balls: [],
         holes: [],
         canShoot: true,
-        aimDirection: { x: 0, y: 0 },
-        shotPower: 0,
+        aimDirection: { x: 1, y: 0 }, // Initial aim to the right
+        shotPower: 0, // This will now be set by shootBall, less directly used
         maxShotPower: 20,
-        mousePos: { x: 0, y: 0 },
+        aimAngle: 0, // ADDED aimAngle, radians, 0 = right
         cueBall: null,
         gameOver: false,
-        remainingBalls: 0
+        remainingBalls: 0,
+        currentForces: [0, 0, 0], // Stores [aimLeft, aimRight, currentStrikePotential]
+        isChargingShot: false,    // ADDED: True if 3rd input is held for power
+        shotChargePower: 0        // ADDED: Accumulated power for the shot
     };
     
     // Constants
@@ -36,6 +39,9 @@
     const MIN_SHOOT_POWER = 2; // Minimum force to register a shot
     const TABLE_COLOR = "rgb(25, 120, 60)";
     const CUE_COLOR = "rgb(255, 255, 255)";
+    const AIM_ADJUST_THRESHOLD = 0.1; // Minimum force to register for aim adjustment
+    const AIM_ADJUST_SPEED = 0.03; // Radians per update, scaled by force
+    const CHARGE_THRESHOLD = 0.1; // ADDED: Min force on 3rd input to start/maintain charge
     
     // Initialize the game
     function initPoolGame() {
@@ -68,6 +74,9 @@
         gameState.holes = [];
         gameState.canShoot = true;
         gameState.gameOver = false;
+        gameState.aimAngle = 0; // Reset aim angle (pointing right)
+        gameState.aimDirection.x = Math.cos(gameState.aimAngle);
+        gameState.aimDirection.y = Math.sin(gameState.aimAngle);
 
         if (!poolCanvas) return; // Ensure canvas exists
         
@@ -95,9 +104,16 @@
         
         // Create colored balls in a triangle formation
         const colors = [
-            "rgb(255,225,30)", "rgb(50,100,255)", "rgb(255,30,30)",
-            "rgb(50,50,50)", "rgb(150,50,255)", "rgb(75,200,35)",
-            "rgb(180,0,75)"
+            "rgb(255,225,30)", // Yellow
+            "rgb(50,100,255)", // Blue
+            "rgb(255,30,30)",  // Red
+            "rgb(50,50,50)",   // Black
+            "rgb(150,50,255)", // Purple
+            "rgb(75,200,35)",  // Green
+            "rgb(180,0,75)",   // Maroon
+            "rgb(255,165,0)",  // Orange (NEW)
+            "rgb(255,192,203)",// Pink (NEW)
+            "rgb(0,255,255)"   // Cyan (NEW)
         ];
         let ballCount = 0;
         const startX = 600;
@@ -135,48 +151,42 @@
     function setupEventListeners() {
         if (!poolCanvas) return; // Ensure canvas exists
 
-        // Mouse move for aiming
-        poolCanvas.addEventListener('mousemove', (e) => {
-            const rect = poolCanvas.getBoundingClientRect();
-            gameState.mousePos.x = e.clientX - rect.left;
-            gameState.mousePos.y = e.clientY - rect.top;
+        // Mouse move for aiming - REMOVED
+        // poolCanvas.addEventListener('mousemove', (e) => {
+        //     const rect = poolCanvas.getBoundingClientRect();
+        //     gameState.mousePos.x = e.clientX - rect.left;
+        //     gameState.mousePos.y = e.clientY - rect.top;
             
-            if (gameState.canShoot && !gameState.gameOver && gameState.cueBall) {
-                // Calculate aim direction from cue ball to mouse
-                gameState.aimDirection.x = gameState.mousePos.x - gameState.cueBall.x;
-                gameState.aimDirection.y = gameState.mousePos.y - gameState.cueBall.y;
+        //     if (gameState.canShoot && !gameState.gameOver && gameState.cueBall) {
+        //         // Calculate aim direction from cue ball to mouse
+        //         gameState.aimDirection.x = gameState.mousePos.x - gameState.cueBall.x;
+        //         gameState.aimDirection.y = gameState.mousePos.y - gameState.cueBall.y;
                 
-                // Normalize the direction
-                const length = Math.sqrt(
-                    gameState.aimDirection.x * gameState.aimDirection.x + 
-                    gameState.aimDirection.y * gameState.aimDirection.y
-                );
+        //         // Normalize the direction
+        //         const length = Math.sqrt(
+        //             gameState.aimDirection.x * gameState.aimDirection.x + 
+        //             gameState.aimDirection.y * gameState.aimDirection.y
+        //         );
                 
-                if (length > 0) {
-                    gameState.aimDirection.x /= length;
-                    gameState.aimDirection.y /= length;
-                }
-            }
-        });
+        //         if (length > 0) {
+        //             gameState.aimDirection.x /= length;
+        //             gameState.aimDirection.y /= length;
+        //         }
+        //     }
+        // });
         
-        // Mouse click for shooting
-        poolCanvas.addEventListener('click', () => {
-            if (gameState.canShoot && !gameState.gameOver && areAllBallsStopped()) {
-                // Use force input from rehabilitation device to determine shot power
-                let power = window.latestNormalizedForce || 0;
-                
-                // Only shoot if power exceeds threshold or if testing without force
-                // Adjusted the threshold check logic slightly
-                const threshold = MIN_SHOOT_POWER / gameState.maxShotPower;
-                if (power >= threshold) {
-                    shootBall(power);
-                } else if (window.latestNormalizedForce === undefined) { 
-                    // Allow shooting with default power if force isn't available (for testing)
-                     console.log("Force input unavailable, using default power 0.5");
-                     shootBall(0.5); 
-                }
-            }
-        });
+        // Mouse click for shooting - REMOVED (shooting now handled by force release)
+        // poolCanvas.addEventListener('click', () => {
+        //     if (gameState.canShoot && !gameState.gameOver && areAllBallsStopped()) {
+        //         let power = gameState.currentForces[2] || 0;
+        //         const threshold = MIN_SHOOT_POWER / gameState.maxShotPower;
+        //         if (power >= threshold) {
+        //             shootBall(power);
+        //         } else {
+        //             console.log(`Pool Game: Shot power ${power.toFixed(2)} below threshold ${threshold.toFixed(2)}. Click to shoot with default if testing.`);
+        //         }
+        //     }
+        // });
     }
     
     // Shoot the cue ball
@@ -219,6 +229,25 @@
         if (!gameState.running) {
             console.log("Pool Game: gameLoop stopping, gameState.running is false.");
             return;
+        }
+        
+        // Update aim from forces if applicable
+        if (gameState.canShoot && !gameState.gameOver && gameState.cueBall) {
+            // Aiming logic now uses gameState.currentForces
+            const forceLeft = gameState.currentForces[0] || 0;
+            const forceRight = gameState.currentForces[1] || 0;
+
+            if (forceLeft > AIM_ADJUST_THRESHOLD) {
+                gameState.aimAngle -= forceLeft * AIM_ADJUST_SPEED;
+            }
+            if (forceRight > AIM_ADJUST_THRESHOLD) {
+                gameState.aimAngle += forceRight * AIM_ADJUST_SPEED;
+            }
+            // Normalize angle (optional, but good practice)
+            // gameState.aimAngle = (gameState.aimAngle + 2 * Math.PI) % (2 * Math.PI); 
+            
+            gameState.aimDirection.x = Math.cos(gameState.aimAngle);
+            gameState.aimDirection.y = Math.sin(gameState.aimAngle);
         }
         
         // Clear canvas
@@ -410,10 +439,15 @@
         const endX = gameState.cueBall.x + gameState.aimDirection.x * lineLength;
         const endY = gameState.cueBall.y + gameState.aimDirection.y * lineLength;
         
-        // Draw force indicator (thicker line based on current force)
-        const force = window.latestNormalizedForce || 0;
+        let displayForce = 0;
+        if (gameState.isChargingShot) {
+            displayForce = gameState.shotChargePower;
+        } else {
+            displayForce = gameState.currentForces[2] || 0;
+        }
+
         poolCtx.strokeStyle = "rgba(255, 0, 0, 0.7)";
-        poolCtx.lineWidth = Math.max(1, force * 10); // Scale line width with force
+        poolCtx.lineWidth = Math.max(1, displayForce * 10); 
         
         poolCtx.beginPath();
         poolCtx.moveTo(gameState.cueBall.x, gameState.cueBall.y);
@@ -421,7 +455,7 @@
         poolCtx.stroke();
         
         // Display force level
-        const forceText = Math.round(force * 100) + "%";
+        const forceText = Math.round(displayForce * 100) + "%";
         poolCtx.fillStyle = "white";
         poolCtx.font = "14px Arial";
         poolCtx.fillText(forceText, endX + 5, endY);
@@ -465,5 +499,48 @@
     // These functions are exported to the global scope to be called from script.js
     window.startPoolGame = initPoolGame;
     window.stopPoolGame = stopPoolGame;
+
+    // NEW: Function to process force inputs from game_control.js
+    window.poolGameProcessInputs = function(forcesArray) {
+        let processedForces = [0,0,0];
+        if (Array.isArray(forcesArray) && forcesArray.length === 3) {
+            processedForces = forcesArray;
+        } else if (Array.isArray(forcesArray) && forcesArray.length > 0) { 
+             processedForces[0] = forcesArray[0] || 0;
+             processedForces[1] = forcesArray[1] || 0;
+             processedForces[2] = forcesArray[2] || 0; 
+        } else {
+            // console.warn("Pool Game: Invalid forcesArray received in poolGameProcessInputs", forcesArray);
+        }
+        gameState.currentForces = processedForces; // Store for aiming and live display
+
+        const strikeForce = gameState.currentForces[2];
+
+        if (gameState.isChargingShot) {
+            // Currently charging
+            if (strikeForce < CHARGE_THRESHOLD) {
+                // RELEASED: Force dropped below threshold
+                if (gameState.canShoot && !gameState.gameOver && areAllBallsStopped() && gameState.shotChargePower > (MIN_SHOOT_POWER / gameState.maxShotPower) ) {
+                    console.log(`Pool Game: Shot released with power: ${gameState.shotChargePower.toFixed(3)}`);
+                    shootBall(gameState.shotChargePower); // Shoot with the stored charge power
+                }
+                gameState.isChargingShot = false;
+                gameState.shotChargePower = 0; // Reset for next shot
+            } else {
+                // STILL CHARGING: Update peak power
+                gameState.shotChargePower = Math.max(gameState.shotChargePower, strikeForce);
+            }
+        } else {
+            // Not currently charging
+            if (strikeForce >= CHARGE_THRESHOLD) {
+                // STARTED CHARGING: Force went above threshold
+                if (gameState.canShoot && !gameState.gameOver && areAllBallsStopped()) {
+                     gameState.isChargingShot = true;
+                     gameState.shotChargePower = strikeForce; // Initial charge
+                     console.log(`Pool Game: Shot charging started. Initial power: ${strikeForce.toFixed(3)}`);
+                }
+            }
+        }
+    };
 
 })(); // End of IIFE 

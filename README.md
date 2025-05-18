@@ -27,18 +27,24 @@ This panel contains the core application functionalities accessible via tabs:
     -   Displays available games as cards.
     -   **Flappy Bird**:
         -   Integrated game controllable via the first force input.
-        -   Force exceeding a threshold triggers a jump.
+        -   Force exceeding a threshold triggers a jump (in 'jump' mode) or influences altitude (in 'gravity' mode).
     -   **Rhythm Keys**:
-        -   If a '3-Dome' device is selected, uses the first three force inputs to control the game lanes.
+        -   Controlled by three inputs (force sensors in Arduino mode, or A,S,D keys in 3-Dome simulation).
         -   If a '1-Dome' device is selected, the single force input is mapped to the middle lane.
+        -   Features background music and sound effects for note hits.
+        -   Note patterns are synchronized with the game's music.
+        -   Scoring is based on the ratio of successful hits to the total number of notes spawned.
     -   Placeholders for future games (Mini Golf, Piano Keys, Subway Surf).
     -   **Space Shooter**:
         -   Vertical control using the first force input.
+    -   **Pool Game**:
+        -   Aiming is controlled by the first two force inputs (or A/D keys in 3-Dome simulation).
+        -   Shot power is determined by charging and releasing the third force input (or S key in 3-Dome simulation).
 
 -   **Measurement Tab**:
     -   Allows recording and analyzing force data over time.
     -   **Controls**: `Start/Stop Measurement` button to toggle recording; `Save Results` button (currently logs data to the browser console).
-    -   **Real-time Metrics**: Displays Maximum Force, Average Force, and Session Duration. For 3-Dome devices, these summary metrics are based on the first sensor's data.
+    -   **Real-time Metrics**: Displays Maximum Force, Average Force, and Session Duration. For 3-Dome devices, these summary metrics are based on the first sensor's data by default.
     -   **Data Visualization**: Uses Chart.js to display a live line graph of normalized force(s) versus time. Shows 1 or 3 lines based on the selected device type.
 
 -   **Settings Tab** (formerly Debug Tab):
@@ -59,17 +65,19 @@ This panel contains the core application functionalities accessible via tabs:
 -   **Input Sources**:
     -   **Arduino Mode**: Uses the **Web Serial API** (`navigator.serial` or `window._realNavigatorSerial`) for direct communication.
         -   For 1-Dome devices, expects a single floating-point pressure value per line.
-        -   For 3-Dome devices, expects data as a JSON string per line: `{"normalizedForces": [f1, f2, f3], "rawPressures": [r1, r2, r3]}`.
+        -   For 3-Dome devices, expects data as a JSON string per line: `{"timestamp": <number>, "pressure": [val1, val2, val3]}`.
     -   **Simulation Mode**: Uses a built-in JavaScript **Simulator** (`window.serialSimulatorInstance`) that mimics the `SerialPort` interface.
-        -   Simulates 1-Dome devices (force controlled by **Spacebar**).
-        -   Simulates 3-Dome devices (forces controlled by **A, S, D keys**).
-        -   Outputs data in the same JSON format as a 3-Dome Arduino.
+        -   Simulates 1-Dome devices (force controlled by **Spacebar**), outputs data as `{"normalizedForces": [fN], "rawPressures": [rP]}`.
+        -   Simulates 3-Dome devices (forces controlled by **A, S, D keys**), outputs data as `{"timestamp": <Date.now()>, "pressure": [rawP1, rawP2, rawP3]}`.
         -   Respects per-dome calibration values set in the Settings Tab.
 -   **Core Components**:
+    -   `script.js`: Handles general UI setup like tab switching, side panel toggle, and manages the Force Bars visualization.
     -   `InputModeManager` (`input_mode_manager.js`): Manages `currentMode` (`simulation`/`arduino`) and `currentDeviceType` ('1-dome'/'3-dome'). Handles mode/type switching, initializes connections (via `ArduinoConnection`), dispatches core events. Holds calibration values (`basePressures`, `pressureRanges`) and current forces/pressures as arrays.
-    -   `ArduinoConnection` (`sensor_interface.js`): Handles low-level communication for both real Web Serial API and the simulated port. Uses callbacks for data and status updates. Parses incoming data (single float or JSON).
-    -   `SimulatedSerialPort` (`serial-simulator.js`): Class mimicking Web Serial `SerialPort`. Generates simulated data for 1-dome or 3-dome devices, respecting calibration values and responding to key presses or `sim-control` events.
-    -   `game_control.js`: Manages game button interactions and funnels force data from `EVT_FORCE_UPDATE` to active games, adapting for 1-dome or 3-dome input as needed.
+    -   `ArduinoConnection` (`sensor_interface.js`): Handles low-level communication for both real Web Serial API and the simulated port. Uses callbacks for data and status updates. Parses incoming data (single float for 1-Dome, or JSON like `{"timestamp": ..., "pressure": [...]}` for 3-Dome Arduino). For formats providing only raw pressures, it calculates normalized forces using calibration data from `InputModeManager`. Implements a data validation step to use the last good raw pressure reading if a new one is suspiciously low, enhancing data reliability.
+    -   `SimulatedSerialPort` (`serial-simulator.js`): Class mimicking Web Serial `SerialPort`. Generates simulated data for 1-dome or 3-dome devices according to their respective output formats, respecting calibration values and responding to key presses or `sim-control` events.
+    -   `MeasurementManager` (`measurement_manager.js`): Manages all logic for the "Measurement Tab". This includes handling the start/stop of measurement recording, calculating real-time metrics (Maximum Force, Average Force, Session Duration - based on the first sensor for 3-Dome), updating the Chart.js line graph with live force data (1 or 3 lines based on device type), and handling the "Save Results" functionality (currently logs to console). It listens to `EVT_FORCE_UPDATE` to receive data.
+    -   `SettingsManager` (`settings_manager.js`): Encapsulates the logic for the "Settings Tab". It manages user interactions for device type selection (1-Dome/3-Dome), mode switching (Simulation/Arduino), connection/disconnection to Arduino, calibration input fields (base pressure and pressure ranges for up to 3 sensors), and the data log controls (start/stop/clear). It communicates these settings to the `InputModeManager` or other relevant components.
+    -   `game_control.js`: Manages game button interactions and funnels force data from `EVT_FORCE_UPDATE` to active games by calling dedicated processing functions in each game's script, adapting for 1-dome or 3-dome input as needed.
     -   `constants.js`: Centralized file for shared JavaScript event names (e.g., `EVT_FORCE_UPDATE`).
 -   **Event-Driven Communication**: The application uses Custom Events on the `document`:
     -   `EVT_FORCE_UPDATE`: Dispatched by `InputModeManager` with `detail: { forces: [f1, f2, f3], rawPressures: [r1, r2, r3], deviceType: '1-dome'/'3-dome' }`.
@@ -79,13 +87,22 @@ This panel contains the core application functionalities accessible via tabs:
     -   `EVT_LOG_MESSAGE`: Dispatched to add entries to the Settings Tab log.
     -   `EVT_PRESSURE_RANGES_CHANGED`: Dispatched by `InputModeManager` when pressure range calibration values are updated.
 -   **Force Processing**:
-    1.  Raw pressure values received (from Arduino as float/JSON or Simulator as JSON).
-    2.  `ArduinoConnection` parses data. For single float (old 1-dome), it normalizes directly. For JSON, it passes arrays.
+    1.  Raw data received:
+        *   Arduino (1-Dome): Single floating-point pressure value per line.
+        *   Arduino (3-Dome): JSON string `{"timestamp": <number>, "pressure": [val1, val2, val3]}` per line.
+        *   Simulator (1-Dome): JSON string `{"normalizedForces": [fN], "rawPressures": [rP]}` per line.
+        *   Simulator (3-Dome): JSON string `{"timestamp": <Date.now()>, "pressure": [rawP1, rawP2, rawP3]}` per line.
+    2.  `ArduinoConnection` parses the incoming data.
+        *   For formats providing only raw pressures (like the 3-Dome Arduino or 3-Dome Simulator), it calculates `normalizedForces` using calibration data (base pressures and pressure ranges) obtained from `InputModeManager`.
+        *   For formats already providing normalized forces (like 1-Dome Simulator), it uses them directly.
+        *   For the old 1-Dome Arduino single float, it normalizes directly.
+        *   It validates raw pressure readings against the previous good value; if a new reading is suspiciously low (e.g., more than 20% below base), the last good value is used.
+        *   It then provides consistent arrays of `normalizedForces` and `rawPressures` to its data handler.
     3.  `InputModeManager` receives processed data (arrays of normalized forces and raw pressures) from `ArduinoConnection`'s data handler.
     4.  `InputModeManager` dispatches `EVT_FORCE_UPDATE`.
 -   **Visualization**:
     -   Force Bars: 1 or 3 HTML `div` elements whose heights are updated via CSS, managed by `script.js`.
-    -   Measurement Graph: Chart.js library.
+    -   Measurement Graph: Chart.js library, managed by `MeasurementManager`.
 
 ## Setup and Usage
 
@@ -93,7 +110,7 @@ This panel contains the core application functionalities accessible via tabs:
     *   A modern web browser. **Google Chrome** or **Microsoft Edge** is required for Arduino mode.
     *   If using Arduino mode:
         *   1-Dome device: Program to send pressure readings (float per line) at 9600 baud.
-        *   3-Dome device: Program to send JSON strings (`{"normalizedForces": [f1,f2,f3], "rawPressures": [r1,r2,r3]}` per line) at 9600 baud.
+        *   3-Dome device: Program to send JSON strings (`{"timestamp": <number>, "pressure": [val1, val2, val3]}` per line) at 9600 baud.
 2.  **Clone the Repository**: `git clone <repository-url>`
 3.  **Open the Interface**: Open `index.html` in your browser.
 

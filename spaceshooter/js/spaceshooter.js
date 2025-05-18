@@ -59,6 +59,7 @@ let gameState = {
         enemies: [],
         explosions: []
     },
+    currentForceInput: 0 // ADDED: To store the latest force input
 };
 
 // Game initialization
@@ -87,6 +88,7 @@ function initGame() {
     gameState.lastFireTime = 0;
     gameState.lastEnemySpawnTime = 0;
     gameState.currentEnemySpawnRate = gameConfig.enemySpawnRate;
+    gameState.currentForceInput = 0; // Reset force input
     
     // Reset UI
     updateScoreDisplay();
@@ -179,8 +181,8 @@ function stopGame() {
 
 // Update player ship position based on force input
 function updateShip(deltaTime) {
-    // Get force input from global variable (set by the main app)
-    const forceInput = window.latestNormalizedForce || 0;
+    // Get force input from gameState (set by spaceShooterProcessForce)
+    const forceInput = gameState.currentForceInput || 0;
     const ship = gameState.entities.ship;
     const availableHeight = canvas.height - ship.height; // Playable vertical area
 
@@ -526,7 +528,14 @@ function updateHealthBar() {
 // Export function to start Space Shooter
 window.startSpaceShooter = function() {
     initGame();
-    startGame(); // Also start the game loop - USE RENAMED FUNCTION
+    startGame(); 
+};
+
+// NEW: Function to process force input from game_control.js
+window.spaceShooterProcessForce = function(forceValue) {
+    if (gameState.isRunning) { // Only process if game is running
+        gameState.currentForceInput = (isNaN(forceValue) ? 0 : forceValue);
+    }
 };
 
 // Export function to check if Space Shooter is running - REMOVE THIS

@@ -17,6 +17,7 @@ class ArduinoConnection {
 
         this.dataHandler = dataHandlerCallback;
         this.statusHandler = statusHandlerCallback;
+        this.lastGoodRawPressures = [null, null, null]; // ADDED: To store last good raw pressures
 
         if (typeof this.dataHandler !== 'function') {
             console.error("ArduinoConnection: dataHandlerCallback is not a function!");
@@ -165,29 +166,103 @@ class ArduinoConnection {
                     try {
                         const data = JSON.parse(line);
                         if (data && Array.isArray(data.normalizedForces) && Array.isArray(data.rawPressures)) {
+                            // Handles data already in {normalizedForces: [], rawPressures: []} format
                             this.dataHandler(data.normalizedForces, data.rawPressures);
+                        } else if (data && data.pressure && Array.isArray(data.pressure) && data.pressure.length === 3) {
+                            // New Arduino 3-dome format: {timestamp: ..., pressure: [p1, p2, p3]}
+                            const incomingRawPressures = data.pressure;
+                            const validatedRawPressures = [];
+                            const normalizedForces = [];
+                            
+                            const defaultBase = 101325;
+                            const defaultRange = 5000;
+
+                            for (let i = 0; i < 3; i++) {
+                                let currentRawP = incomingRawPressures[i];
+                                let baseP = defaultBase;
+                                let rangeP = defaultRange;
+
+                                if (window.inputManager) {
+                                    if (window.inputManager.basePressures && window.inputManager.basePressures[i] !== undefined) {
+                                        baseP = window.inputManager.basePressures[i];
+                                    }
+                                    if (window.inputManager.pressureRanges && window.inputManager.pressureRanges[i] !== undefined) {
+                                        rangeP = window.inputManager.pressureRanges[i];
+                                    }
+                                }
+
+                                // Data validation
+                                if (currentRawP < baseP * 0.80 && this.lastGoodRawPressures[i] !== null) {
+                                    console.warn(`Suspect raw pressure for dome ${i}: ${currentRawP} (base: ${baseP}). Using last good: ${this.lastGoodRawPressures[i]}`);
+                                    currentRawP = this.lastGoodRawPressures[i];
+                                } else {
+                                    this.lastGoodRawPressures[i] = currentRawP; // Update last good pressure
+                                }
+                                validatedRawPressures.push(currentRawP);
+                                
+                                let normF = (rangeP === 0) ? 0 : (currentRawP - baseP) / rangeP;
+                                normF = Math.max(0, Math.min(1, normF));
+                                normalizedForces.push(normF);
+                            }
+                            this.dataHandler(normalizedForces, validatedRawPressures);
                         } else {
-                            const singleRawValue = parseFloat(line);
-                            if (!isNaN(singleRawValue) && window.inputManager && window.inputManager.currentDeviceType === '1-dome') {
-                                console.warn("Received old single float format, processing as 1-dome.");
-                                const basePressure = window.inputManager.basePressures[0] || 100000;
-                                const pressureRange = window.inputManager.pressureRanges[0] || 5000;
-                                let normalizedForce = (singleRawValue - basePressure) / pressureRange;
+                            // Fallback for 1-dome old single float format if JSON is not recognized above
+                            const incomingSingleRawValue = parseFloat(line); // Attempt to parse the original line string
+                            if (!isNaN(incomingSingleRawValue) && window.inputManager && window.inputManager.currentDeviceType === '1-dome') {
+                                console.warn("Received JSON but not in expected multi-dome format, attempting 1-dome single float parse:", line);
+                                let currentRawP = incomingSingleRawValue;
+                                let basePressure = 101325; // Default
+                                let pressureRange = 5000;  // Default
+
+                                if (window.inputManager.basePressures && window.inputManager.basePressures[0] !== undefined) {
+                                    basePressure = window.inputManager.basePressures[0];
+                                }
+                                if (window.inputManager.pressureRanges && window.inputManager.pressureRanges[0] !== undefined) {
+                                    pressureRange = window.inputManager.pressureRanges[0];
+                                }
+
+                                // Data validation for 1-dome
+                                if (currentRawP < basePressure * 0.80 && this.lastGoodRawPressures[0] !== null) {
+                                    console.warn(`Suspect raw pressure for dome 0 (1-dome mode): ${currentRawP} (base: ${basePressure}). Using last good: ${this.lastGoodRawPressures[0]}`);
+                                    currentRawP = this.lastGoodRawPressures[0];
+                                } else {
+                                    this.lastGoodRawPressures[0] = currentRawP; // Update last good pressure
+                                }
+
+                                let normalizedForce = (pressureRange === 0) ? 0 : (currentRawP - basePressure) / pressureRange;
                                 normalizedForce = Math.max(0, Math.min(1, normalizedForce));
-                                this.dataHandler([normalizedForce], [singleRawValue]);
+                                this.dataHandler([normalizedForce], [currentRawP]); // Pass validated currentRawP
                             } else {
-                                console.warn("Received malformed or non-JSON data, or unhandled single float for 3-dome:", line);
+                                console.warn("Received malformed or unhandled JSON data:", line);
                             }
                         }
                     } catch (e) {
-                        const singleRawValue = parseFloat(line);
-                        if (!isNaN(singleRawValue) && window.inputManager && window.inputManager.currentDeviceType === '1-dome') {
+                        // Fallback for non-JSON data, likely 1-dome old single float format
+                        const incomingSingleRawValue = parseFloat(line);
+                        if (!isNaN(incomingSingleRawValue) && window.inputManager && window.inputManager.currentDeviceType === '1-dome') {
                             console.warn("Received non-JSON, attempting to parse as old single float format for 1-dome:", line);
-                            const basePressure = window.inputManager.basePressures[0] || 100000;
-                            const pressureRange = window.inputManager.pressureRanges[0] || 5000;
-                            let normalizedForce = (singleRawValue - basePressure) / pressureRange;
+                            let currentRawP = incomingSingleRawValue;
+                            let basePressure = 101325; // Default
+                            let pressureRange = 5000;  // Default
+
+                            if (window.inputManager.basePressures && window.inputManager.basePressures[0] !== undefined) {
+                                basePressure = window.inputManager.basePressures[0];
+                            }
+                            if (window.inputManager.pressureRanges && window.inputManager.pressureRanges[0] !== undefined) {
+                                pressureRange = window.inputManager.pressureRanges[0];
+                            }
+
+                            // Data validation for 1-dome (non-JSON path)
+                            if (currentRawP < basePressure * 0.80 && this.lastGoodRawPressures[0] !== null) {
+                                console.warn(`Suspect raw pressure for dome 0 (1-dome non-JSON): ${currentRawP} (base: ${basePressure}). Using last good: ${this.lastGoodRawPressures[0]}`);
+                                currentRawP = this.lastGoodRawPressures[0];
+                            } else {
+                                this.lastGoodRawPressures[0] = currentRawP; // Update last good pressure
+                            }
+
+                            let normalizedForce = (pressureRange === 0) ? 0 : (currentRawP - basePressure) / pressureRange;
                             normalizedForce = Math.max(0, Math.min(1, normalizedForce));
-                            this.dataHandler([normalizedForce], [singleRawValue]);
+                            this.dataHandler([normalizedForce], [currentRawP]); // Pass validated currentRawP
                         } else {
                              console.warn("Error parsing data (JSON or fallback float):", line, e);
                         }
