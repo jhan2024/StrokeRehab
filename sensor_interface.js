@@ -18,6 +18,7 @@ class ArduinoConnection {
         this.dataHandler = dataHandlerCallback;
         this.statusHandler = statusHandlerCallback;
         this.lastGoodRawPressures = [null, null, null]; // ADDED: To store last good raw pressures
+        this.lineBuffer = ""; // ADDED: For robust line buffering
 
         if (typeof this.dataHandler !== 'function') {
             console.error("ArduinoConnection: dataHandlerCallback is not a function!");
@@ -159,12 +160,22 @@ class ArduinoConnection {
                      }
                     break; 
                 }
-                
-                const rawValueString = new TextDecoder().decode(value).trim();
+                console.log("ArduinoConnection: Received raw value:", value);
+                const rawValueString = new TextDecoder().decode(value); // Don't trim yet
+                console.log("ArduinoConnection: Raw data chunk:", rawValueString);
 
-                const lines = rawValueString.split('\n');
-                for (const line of lines) {
-                    if (line.trim() === '') continue;
+                this.lineBuffer += rawValueString; // Append new data to buffer
+
+                let newlineIndex;
+                // Process all complete lines in the buffer
+                while ((newlineIndex = this.lineBuffer.indexOf('\n')) >= 0) {
+                    const line = this.lineBuffer.substring(0, newlineIndex).trim(); // Get the line and trim it
+                    this.lineBuffer = this.lineBuffer.substring(newlineIndex + 1); // Remove the processed line from buffer
+
+                    if (line === '') continue; // Skip empty lines that might result from multiple newlines
+
+                    console.log("ArduinoConnection: Processing buffered line:", line);
+
                     try {
                         const data = JSON.parse(line);
                         if (data && Array.isArray(data.normalizedForces) && Array.isArray(data.rawPressures)) {
