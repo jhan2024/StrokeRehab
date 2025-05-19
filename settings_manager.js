@@ -118,7 +118,7 @@ class SettingsManager {
             this.inputManager.setPressureRange(index, value);
         } else {
             // Restore old value if input is invalid
-            event.target.value = this.inputManager.pressureRanges[index] || 5000;
+            event.target.value = this.inputManager.pressureRanges[index] || DEFAULT_PRESSURE_RANGE;
         }
     }
 

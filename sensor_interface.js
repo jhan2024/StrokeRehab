@@ -98,11 +98,13 @@ class ArduinoConnection {
                 }
             } catch(e) { console.error("Error cancelling reader:", e);}
             try {
-                if (this.reader.releaseLock && typeof this.reader.releaseLock === 'function') {
+                if (this.reader && typeof this.reader.releaseLock === 'function') {
                     this.reader.releaseLock();
-                    console.log("Reader lock released.");
+                    console.log("Reader lock released by disconnect().");
+                } else {
+                    console.log("Reader lock was likely already released or reader was null before explicit release in disconnect().");
                 }
-            } catch (e) { console.error("Error releasing reader lock:", e); }
+            } catch (e) { console.error("Error explicitly releasing reader lock in disconnect():", e); }
             this.reader = null;
         }
 
@@ -174,8 +176,8 @@ class ArduinoConnection {
                             const validatedRawPressures = [];
                             const normalizedForces = [];
                             
-                            const defaultBase = 101325;
-                            const defaultRange = 5000;
+                            const defaultBase = DEFAULT_BASE_PRESSURE;
+                            const defaultRange = DEFAULT_PRESSURE_RANGE;
 
                             for (let i = 0; i < 3; i++) {
                                 let currentRawP = incomingRawPressures[i];
@@ -211,8 +213,8 @@ class ArduinoConnection {
                             if (!isNaN(incomingSingleRawValue) && window.inputManager && window.inputManager.currentDeviceType === '1-dome') {
                                 console.warn("Received JSON but not in expected multi-dome format, attempting 1-dome single float parse:", line);
                                 let currentRawP = incomingSingleRawValue;
-                                let basePressure = 101325; // Default
-                                let pressureRange = 5000;  // Default
+                                let basePressure = DEFAULT_BASE_PRESSURE; // Default
+                                let pressureRange = DEFAULT_PRESSURE_RANGE;  // Default
 
                                 if (window.inputManager.basePressures && window.inputManager.basePressures[0] !== undefined) {
                                     basePressure = window.inputManager.basePressures[0];
@@ -242,8 +244,8 @@ class ArduinoConnection {
                         if (!isNaN(incomingSingleRawValue) && window.inputManager && window.inputManager.currentDeviceType === '1-dome') {
                             console.warn("Received non-JSON, attempting to parse as old single float format for 1-dome:", line);
                             let currentRawP = incomingSingleRawValue;
-                            let basePressure = 101325; // Default
-                            let pressureRange = 5000;  // Default
+                            let basePressure = DEFAULT_BASE_PRESSURE; // Default
+                            let pressureRange = DEFAULT_PRESSURE_RANGE;  // Default
 
                             if (window.inputManager.basePressures && window.inputManager.basePressures[0] !== undefined) {
                                 basePressure = window.inputManager.basePressures[0];

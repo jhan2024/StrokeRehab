@@ -148,6 +148,22 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 sidePanelConnectBtn.disabled = true; // Disable and hide in sim mode
             }
+            // Listener for the side panel connect button (distinct from settings tab connect button)
+            sidePanelConnectBtn.addEventListener('click', () => {
+                console.log('[Side Panel Button] Clicked.');
+                console.log(`[Side Panel Button] состояние InputManager: mode='${window.inputManager?.currentMode}', isConnected=${window.inputManager?.isConnected}`);
+                if (window.inputManager && window.inputManager.currentMode === 'arduino') {
+                    if (window.inputManager.isConnected) {
+                        console.log('[Side Panel Button] Попытка отключить Arduino...');
+                        window.inputManager.disconnectDevice();
+                    } else {
+                        console.log('[Side Panel Button] Попытка подключить Arduino...');
+                        window.inputManager.connectDevice('arduino');
+                    }
+                } else {
+                    console.warn(`[Side Panel Button] Кнопка нажата, но не в режиме Arduino или inputManager недоступен. Режим: ${window.inputManager?.currentMode}`);
+                }
+            });
         }
         
         console.log("Global UI (Side Panel) Updated for mode/device/connection change.");
@@ -220,12 +236,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
              // Listener for the side panel connect button (distinct from settings tab connect button)
             sidePanelConnectBtn.addEventListener('click', () => {
+                console.log('[Side Panel Button] Clicked.');
+                console.log(`[Side Panel Button] состояние InputManager: mode='${window.inputManager?.currentMode}', isConnected=${window.inputManager?.isConnected}`);
                 if (window.inputManager && window.inputManager.currentMode === 'arduino') {
                     if (window.inputManager.isConnected) {
+                        console.log('[Side Panel Button] Попытка отключить Arduino...');
                         window.inputManager.disconnectDevice();
                     } else {
+                        console.log('[Side Panel Button] Попытка подключить Arduino...');
                         window.inputManager.connectDevice('arduino');
                     }
+                } else {
+                    console.warn(`[Side Panel Button] Кнопка нажата, но не в режиме Arduino или inputManager недоступен. Режим: ${window.inputManager?.currentMode}`);
                 }
             });
         }

@@ -28,9 +28,9 @@ let audioContext = null;
 let backgroundMusic = null;
 const noteHitSamples = []; // To store AudioBuffer objects for note hits
 const noteHitSamplePaths = [
-    'rhythmkeys/assets/audio/note_lane0.ogg', // Placeholder for C4-like sound
-    'rhythmkeys/assets/audio/note_lane1.ogg', // Placeholder for E4-like sound
-    'rhythmkeys/assets/audio/note_lane2.ogg'  // Placeholder for G4-like sound
+    'rhythmkeys/assets/audio/note_lane0.wav', // Placeholder for C4-like sound
+    'rhythmkeys/assets/audio/note_lane1.wav', // Placeholder for E4-like sound
+    'rhythmkeys/assets/audio/note_lane2.wav'  // Placeholder for G4-like sound
 ];
 const BACKGROUND_MUSIC_PATH = 'rhythmkeys/assets/audio/rhythm_keys_bgm.ogg'; // Or .mp3, ensure this matches your file
 const NOTE_HIT_VOLUME = 0.5;
@@ -503,7 +503,7 @@ window.rhythmGameProcessInputs = function(forcesArray, threshold) {
                         if (rhythmKeysScoreElement) rhythmKeysScoreElement.textContent = `Hits: ${rhythmKeysScore.hits} / Spawned: ${rhythmKeysScore.spawned}`; // MODIFIED
                         rhythmKeysActiveNotes.splice(noteIdx, 1); // Remove hit note
 
-                        playNoteSound(i);
+                        // playNoteSound(i); // TODO: Uncomment this when we have a good sound for it, now it's not sounding right
                         showHitEffect(i); // This might need adjustment: differentiate sustained hold vs. successful hit
                         // For now, any force above threshold that overlaps a note is a hit.
                         // More advanced logic could check for the *rising edge* of the force or a peak.

@@ -4,8 +4,8 @@ class SimulatedSerialPort {
         this.isOpen = false;
         this.simulationInterval = null;
         this.latestValue = null;
-        this.basePressure = 101300; // Pa
-        this.pressureRange = 1000;  // Pa (Max pressure offset from base) - Default/Fallback
+        this.basePressure = DEFAULT_BASE_PRESSURE; // Pa
+        this.pressureRange = DEFAULT_PRESSURE_RANGE;  // Pa (Max pressure offset from base) - Default/Fallback
         this.noiseMagnitude = 50;   // Pa 
 
         // Device Type: '1-dome' or '3-dome'
