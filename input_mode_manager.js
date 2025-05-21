@@ -24,7 +24,7 @@ class InputModeManager {
         
         // Calibration: single value for 1-dome, array for 3-dome
         this.basePressures = [DEFAULT_BASE_PRESSURE, DEFAULT_BASE_PRESSURE, DEFAULT_BASE_PRESSURE]; 
-        this.pressureRanges = [DEFAULT_PRESSURE_RANGE, DEFAULT_PRESSURE_RANGE, DEFAULT_PRESSURE_RANGE];  
+        this._pressureRanges = [DEFAULT_PRESSURE_RANGE, DEFAULT_PRESSURE_RANGE, DEFAULT_PRESSURE_RANGE];  // Renamed to _pressureRanges
         
         this.spacebarPressed = false;
         this.spacebarHoldStartTime = 0;
@@ -78,9 +78,10 @@ class InputModeManager {
         // Inform simulator about the initial type if it's already instantiated
         if (window.serialSimulatorInstance) {
             window.serialSimulatorInstance.setDeviceType(this.currentDeviceType);
-            // window.serialSimulatorInstance.setPressureRanges(this.pressureRanges); // This will be handled via event
+            // window.serialSimulatorInstance.setPressureRanges(this._pressureRanges); // This will be handled via event
+            // window.serialSimulatorInstance.setBasePressures(this.basePressures); // This will be handled via event
         }
-        this.resetCalibrationArrays(); // Adjust calibration arrays based on type, this will dispatch EVT_PRESSURE_RANGES_CHANGED
+        this.resetCalibrationArrays(); // Adjust calibration arrays based on type, this will dispatch EVT_PRESSURE_RANGES_CHANGED and EVT_BASE_PRESSURES_CHANGED
     }
 
     setDeviceType(type) {
@@ -88,7 +89,7 @@ class InputModeManager {
         console.log(`InputModeManager: Setting device type to ${type}`);
         this.currentDeviceType = type;
 
-        this.resetCalibrationArrays(); // This updates this.pressureRanges and dispatches EVT_PRESSURE_RANGES_CHANGED
+        this.resetCalibrationArrays(); // This updates this._pressureRanges and dispatches EVT_PRESSURE_RANGES_CHANGED
 
         if (window.serialSimulatorInstance) {
             window.serialSimulatorInstance.setDeviceType(this.currentDeviceType);
@@ -114,7 +115,7 @@ class InputModeManager {
             this.currentForces = [this.currentForces[0] || 0];
             this.latestRawPressures = [this.latestRawPressures[0] || NaN];
             this.basePressures = [this.basePressures[0] || DEFAULT_BASE_PRESSURE];
-            this.pressureRanges = [this.pressureRanges[0] || DEFAULT_PRESSURE_RANGE];
+            this._pressureRanges = [this._pressureRanges[0] || DEFAULT_PRESSURE_RANGE];
         } else { // 3-dome
             this.currentForces = [(this.currentForces[0] || 0), (this.currentForces[1] || 0), (this.currentForces[2] || 0)];
             this.latestRawPressures = [(this.latestRawPressures[0] || NaN), (this.latestRawPressures[1] || NaN), (this.latestRawPressures[2] || NaN)];
@@ -125,15 +126,19 @@ class InputModeManager {
                 (this.basePressures.length > 1 ? this.basePressures[1] : defaultBase) || defaultBase,
                 (this.basePressures.length > 2 ? this.basePressures[2] : defaultBase) || defaultBase
             ];
-            this.pressureRanges = [
-                this.pressureRanges[0] || defaultRange,
-                (this.pressureRanges.length > 1 ? this.pressureRanges[1] : defaultRange) || defaultRange,
-                (this.pressureRanges.length > 2 ? this.pressureRanges[2] : defaultRange) || defaultRange
+            this._pressureRanges = [
+                this._pressureRanges[0] || defaultRange,
+                (this._pressureRanges.length > 1 ? this._pressureRanges[1] : defaultRange) || defaultRange,
+                (this._pressureRanges.length > 2 ? this._pressureRanges[2] : defaultRange) || defaultRange
             ];
         }
         // Dispatch event to notify UI of pressure range changes
         document.dispatchEvent(new CustomEvent(EVT_PRESSURE_RANGES_CHANGED, {
-            detail: { pressureRanges: this.pressureRanges, deviceType: this.currentDeviceType }
+            detail: { pressureRanges: this._pressureRanges, deviceType: this.currentDeviceType }
+        }));
+        // Dispatch event to notify UI of base pressure changes
+        document.dispatchEvent(new CustomEvent(EVT_BASE_PRESSURES_CHANGED, {
+            detail: { basePressures: this.basePressures, deviceType: this.currentDeviceType }
         }));
     }
 
@@ -159,6 +164,10 @@ class InputModeManager {
         const success = await this.arduino.connect(targetMode);
         if (success) {
             console.log(`InputModeManager: Connection successful to ${targetMode}.`);
+            // Pass initial calibration parameters to ArduinoConnection
+            if (this.arduino.setCalibrationParameters) { // Check if method exists
+                this.arduino.setCalibrationParameters(this.basePressures, this._pressureRanges);
+            }
             // Adjust listeners based on the mode we actually connected to
             if (targetMode === 'simulation') {
                 if (this.currentDeviceType === '1-dome') {
@@ -327,5 +336,101 @@ class InputModeManager {
             isConnected: this.arduino.isConnected 
         };
         document.dispatchEvent(new CustomEvent(EVT_MODE_CHANGED, { detail: eventDetail }));
+    }
+
+    // --- Calibration Methods ---
+    calibrateZeroPressure(domeIndex) {
+        if (domeIndex === undefined || domeIndex < 0 || domeIndex >= (this.currentDeviceType === '1-dome' ? 1 : 3)) {
+            console.error("CalibrateZeroPressure: Invalid dome index", domeIndex, "for device type", this.currentDeviceType);
+            document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { detail: { message: `Calibration failed: Invalid sensor index.`, type: 'error' }}));
+            return;
+        }
+
+        const currentRawPressure = this.latestRawPressures[domeIndex];
+        if (currentRawPressure === undefined || isNaN(currentRawPressure)) {
+            console.warn(`Cannot calibrate sensor ${domeIndex + 1}: No recent raw pressure reading available.`);
+            document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { detail: { message: `Calibration for sensor ${domeIndex + 1} failed: No reading.`, type: 'error' }}));
+            return;
+        }
+
+        this.basePressures[domeIndex] = parseFloat(currentRawPressure.toFixed(2));
+        console.log(`Calibrated base pressure for sensor ${domeIndex + 1} to: ${this.basePressures[domeIndex]} Pa`);
+        document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { detail: { message: `Sensor ${domeIndex + 1} zero calibrated to ${this.basePressures[domeIndex]} Pa.`, type: 'success' }}));
+
+        if (this.arduino.isConnected && this.arduino.updateCalibrationParameters) {
+            this.arduino.updateCalibrationParameters(this.basePressures, this._pressureRanges);
+        }
+        // Notify UI about the change in base pressures
+        document.dispatchEvent(new CustomEvent(EVT_BASE_PRESSURES_CHANGED, {
+            detail: { basePressures: this.basePressures, deviceType: this.currentDeviceType }
+        }));
+
+        // If in simulation mode, also update the simulator
+        if (this.currentMode === 'simulation' && window.serialSimulatorInstance && window.serialSimulatorInstance.setBasePressures) {
+            window.serialSimulatorInstance.setBasePressures(this.basePressures);
+        }
+    }
+
+    setPressureRange(domeIndex, value) {
+        if (domeIndex === undefined || domeIndex < 0 || domeIndex >= (this.currentDeviceType === '1-dome' ? 1 : 3)) {
+            console.error("setPressureRange: Invalid dome index", domeIndex);
+            return;
+        }
+        if (typeof value !== 'number' || isNaN(value) || value <= 0) {
+            console.error(`Invalid pressure range value: ${value} for sensor ${domeIndex + 1}. Must be a positive number.`);
+            document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { detail: { message: `Invalid range for sensor ${domeIndex + 1}.`, type: 'error' }}));
+            return;
+        }
+
+        this._pressureRanges[domeIndex] = value;
+        console.log(`Set pressure range for sensor ${domeIndex + 1} to: ${value} Pa`);
+        document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { detail: { message: `Sensor ${domeIndex + 1} range set to ${value} Pa.`, type: 'info' }}));
+
+        if (this.arduino.isConnected && this.arduino.updateCalibrationParameters) {
+            this.arduino.updateCalibrationParameters(this.basePressures, this._pressureRanges);
+        }
+        // Notify UI about the change in pressure ranges
+        document.dispatchEvent(new CustomEvent(EVT_PRESSURE_RANGES_CHANGED, {
+            detail: { pressureRanges: this._pressureRanges, deviceType: this.currentDeviceType }
+        }));
+
+        // If in simulation mode, also update the simulator
+        if (this.currentMode === 'simulation' && window.serialSimulatorInstance && window.serialSimulatorInstance.setPressureRanges) {
+            window.serialSimulatorInstance.setPressureRanges(this._pressureRanges);
+        }
+    }
+
+    setBasePressure(domeIndex, value) {
+        if (domeIndex === undefined || domeIndex < 0 || domeIndex >= (this.currentDeviceType === '1-dome' ? 1 : 3)) {
+            console.error("setBasePressure: Invalid dome index", domeIndex);
+            return;
+        }
+        if (typeof value !== 'number' || isNaN(value)) {
+            console.error(`Invalid base pressure value: ${value} for sensor ${domeIndex + 1}. Must be a number.`);
+            document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { detail: { message: `Invalid base pressure for sensor ${domeIndex + 1}.`, type: 'error' }}));
+            return;
+        }
+
+        this.basePressures[domeIndex] = value;
+        console.log(`Set base pressure for sensor ${domeIndex + 1} to: ${value} Pa`);
+        document.dispatchEvent(new CustomEvent(EVT_STATUS_MESSAGE, { detail: { message: `Sensor ${domeIndex + 1} base pressure set to ${value} Pa.`, type: 'info' }}));
+
+        if (this.arduino.isConnected && this.arduino.updateCalibrationParameters) {
+            this.arduino.updateCalibrationParameters(this.basePressures, this._pressureRanges);
+        }
+        // Notify UI about the change in base pressures
+        document.dispatchEvent(new CustomEvent(EVT_BASE_PRESSURES_CHANGED, {
+            detail: { basePressures: this.basePressures, deviceType: this.currentDeviceType }
+        }));
+
+        // If in simulation mode, also update the simulator
+        if (this.currentMode === 'simulation' && window.serialSimulatorInstance && window.serialSimulatorInstance.setBasePressures) {
+            window.serialSimulatorInstance.setBasePressures(this.basePressures);
+        }
+    }
+
+    // Getter for pressure ranges (used by settings manager to initialize)
+    get pressureRanges() {
+        return this._pressureRanges;
     }
 } 

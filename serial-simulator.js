@@ -4,13 +4,15 @@ class SimulatedSerialPort {
         this.isOpen = false;
         this.simulationInterval = null;
         this.latestValue = null;
-        this.basePressure = DEFAULT_BASE_PRESSURE; // Pa
+        this.basePressure = DEFAULT_BASE_PRESSURE; // Pa - This will become a fallback or per-dome default
         this.pressureRange = DEFAULT_PRESSURE_RANGE;  // Pa (Max pressure offset from base) - Default/Fallback
         this.noiseMagnitude = 50;   // Pa 
 
         // Device Type: '1-dome' or '3-dome'
         this.deviceType = '1-dome'; // Default to 1-dome
         this.pressureRanges = [this.pressureRange, this.pressureRange, this.pressureRange]; // ADDED: Array for per-dome ranges
+        this.basePressures = [this.basePressure, this.basePressure, this.basePressure]; // ADDED: Array for per-dome base pressures
+        this.biasValues = [0, 0, 0]; // ADDED: Bias for each dome
 
         // State for 1-dome simulation (controlled by spacebar via sim-control event)
         this.isIncreasingForce1Dome = false;
@@ -106,19 +108,48 @@ class SimulatedSerialPort {
     // ADDED: Method to set per-dome pressure ranges
     setPressureRanges(ranges) {
         if (Array.isArray(ranges)) {
-            this.pressureRanges = ranges.map(r => (typeof r === 'number' && r > 0 ? r : this.pressureRange));
             // Ensure it has 3 elements for 3-dome mode, or 1 for 1-dome, padding with the default if necessary
             if (this.deviceType === '1-dome') {
-                this.pressureRanges = [this.pressureRanges[0] || this.pressureRange];
+                this.pressureRanges = [ranges[0] || this.pressureRange];
             } else { // 3-dome
-                while (this.pressureRanges.length < 3) {
-                    this.pressureRanges.push(this.pressureRange); // Default fallback
-                }
-                this.pressureRanges = this.pressureRanges.slice(0, 3); // Ensure max 3 elements
+                this.pressureRanges = [
+                    ranges[0] !== undefined ? ranges[0] : this.pressureRange,
+                    ranges[1] !== undefined ? ranges[1] : this.pressureRange,
+                    ranges[2] !== undefined ? ranges[2] : this.pressureRange
+                ];
             }
             console.log(`Simulator: Pressure ranges set to:`, this.pressureRanges);
         } else {
             console.warn("Simulator: Invalid pressure ranges provided.", ranges);
+        }
+    }
+
+    // ADDED: Method to set per-dome base pressures
+    setBasePressures(bases) {
+        if (Array.isArray(bases)) {
+            if (this.deviceType === '1-dome') {
+                this.basePressures = [bases[0] || this.basePressure];
+            } else { // 3-dome
+                this.basePressures = [
+                    bases[0] !== undefined ? bases[0] : this.basePressure,
+                    bases[1] !== undefined ? bases[1] : this.basePressure,
+                    bases[2] !== undefined ? bases[2] : this.basePressure
+                ];
+            }
+            console.log(`Simulator: Base pressures set to:`, this.basePressures);
+        } else {
+            console.warn("Simulator: Invalid base pressures provided.", bases);
+        }
+    }
+
+    // ADDED: Method to set a bias for a specific dome
+    setBias(domeIndex, biasValue) {
+        if (domeIndex >= 0 && domeIndex < this.biasValues.length) {
+            const oldBias = this.biasValues[domeIndex];
+            this.biasValues[domeIndex] = typeof biasValue === 'number' ? biasValue : 0;
+            console.log(`Simulator: Bias for dome ${domeIndex} changed from ${oldBias} to ${this.biasValues[domeIndex]}`);
+        } else {
+            console.warn(`Simulator: Invalid dome index ${domeIndex} for setBias.`);
         }
     }
 
@@ -197,9 +228,11 @@ class SimulatedSerialPort {
                     }
                 }
                 const currentPressureRange = this.pressureRanges[0] || this.pressureRange;
+                const currentBasePressure = this.basePressures[0] || this.basePressure;
+                const currentBias = this.biasValues[0] || 0;
                 const pressureOffset = this.currentSimulatedForce1Dome * currentPressureRange;
                 const noise = (Math.random() - 0.5) * this.noiseMagnitude;
-                const rawPressure = Math.max(this.basePressure, this.basePressure + pressureOffset + noise);
+                const rawPressure = Math.max(currentBasePressure, currentBasePressure + pressureOffset + currentBias + noise);
                 
                 outputObject.normalizedForces.push(this.currentSimulatedForce1Dome);
                 outputObject.rawPressures.push(parseFloat(rawPressure.toFixed(2)));
@@ -219,10 +252,13 @@ class SimulatedSerialPort {
                         }
                     }
                     const currentPressureRange = this.pressureRanges[i] || this.pressureRange;
+                    const currentBasePressure = this.basePressures[i] || this.basePressure;
+                    const currentBias = this.biasValues[i] || 0;
                     // Use currentSimulatedForces3Dome[i] to calculate the pressureOffset for rawPressure
                     const pressureOffset = this.currentSimulatedForces3Dome[i] * currentPressureRange;
                     const noise = (Math.random() - 0.5) * this.noiseMagnitude;
-                    const rawPressure = Math.max(this.basePressure, this.basePressure + pressureOffset + noise);
+                    // Apply bias before adding noise and clamping with base pressure
+                    const rawPressure = Math.max(currentBasePressure, currentBasePressure + pressureOffset + currentBias + noise);
                     
                     // outputObject.normalizedForces.push(this.currentSimulatedForces3Dome[i]); // REMOVED for new format
                     outputObject.pressure.push(parseFloat(rawPressure.toFixed(2))); // ADDED for new format
@@ -277,7 +313,6 @@ class SimulatedSerialPort {
      }
 }
 
-// --- NOW create instances and check real API ---
 
 // Store the real navigator.serial if it exists, otherwise null
 window._realNavigatorSerial = navigator.serial || null;
@@ -290,7 +325,3 @@ if(window._realNavigatorSerial) {
 } else {
     console.log("Real Web Serial API not detected.");
 }
-
-// --- REMOVED SimulatedSerial class --- 
-// --- REMOVED navigator.serial replacement logic --- 
-// --- REMOVED switchTo... helper functions --- 

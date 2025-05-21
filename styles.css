@@ -538,6 +538,53 @@ body {
     border-radius: 3px;
 }
 
+/* Calibration Control Group Styling */
+.dome-calibration-group {
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 10px 15px;
+    margin-bottom: 10px;
+    background-color: #fdfdfd;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.calibration-item {
+    display: flex;
+    flex-direction: column;
+    margin-right: 15px;
+    flex-grow: 1;
+}
+
+.calibration-item label {
+    font-size: 0.9em;
+    margin-bottom: 4px;
+    font-weight: 500;
+    color: #333;
+}
+
+.calibration-item input[type="number"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+.dome-calibration-group .calibrate-btn {
+    padding: 8px 15px;
+    margin-left: 10px;
+    background-color: #5bc0de;
+    border-color: #46b8da;
+    flex-shrink: 0;
+}
+
+.dome-calibration-group .calibrate-btn:hover {
+    background-color: #31b0d5;
+    border-color: #269abc;
+}
+
 /* Spacebar Indicator */
 .spacebar-indicator {
     position: fixed;

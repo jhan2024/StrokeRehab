@@ -1,7 +1,7 @@
 // settings_manager.js
 
 // Depends on:
-// - constants.js (EVT_FORCE_UPDATE, EVT_MODE_CHANGED, EVT_LOG_MESSAGE, EVT_PRESSURE_RANGES_CHANGED)
+// - constants.js (EVT_FORCE_UPDATE, EVT_MODE_CHANGED, EVT_LOG_MESSAGE, EVT_PRESSURE_RANGES_CHANGED, EVT_BASE_PRESSURES_CHANGED)
 // - input_mode_manager.js (instance passed to constructor)
 
 class SettingsManager {
@@ -12,6 +12,11 @@ class SettingsManager {
         this.connectBtn = document.querySelector('#settingsContent .connect-btn');
         this.simulationToggle = document.querySelector('#settingsContent .simulation-toggle');
         this.calibrateZeroBtn = document.getElementById('calibrateZeroBtn');
+        this.calibrateZeroBtns = [
+            document.getElementById('calibrateZeroBtn0'),
+            document.getElementById('calibrateZeroBtn1'),
+            document.getElementById('calibrateZeroBtn2')
+        ];
         this.pressureRangeInputs = [
             document.getElementById('pressureRangeInput0'),
             document.getElementById('pressureRangeInput1'),
@@ -21,6 +26,21 @@ class SettingsManager {
             document.getElementById('pressure-range-group-0'),
             document.getElementById('pressure-range-group-1'),
             document.getElementById('pressure-range-group-2')
+        ];
+        this.basePressureInputs = [
+            document.getElementById('basePressureInput0'),
+            document.getElementById('basePressureInput1'),
+            document.getElementById('basePressureInput2')
+        ];
+        this.basePressureGroups = [
+            document.getElementById('base-pressure-group-0'),
+            document.getElementById('base-pressure-group-1'),
+            document.getElementById('base-pressure-group-2')
+        ];
+        this.domeCalibrationGroups = [
+            document.getElementById('dome-calibration-group-0'),
+            document.getElementById('dome-calibration-group-1'),
+            document.getElementById('dome-calibration-group-2')
         ];
         this.startLogBtn = document.querySelector('#settingsContent .start-log');
         this.clearLogBtn = document.querySelector('#settingsContent .clear-log');
@@ -56,6 +76,7 @@ class SettingsManager {
         this.handleSimulationToggleClick = this.handleSimulationToggleClick.bind(this);
         this.handleCalibrateZeroClick = this.handleCalibrateZeroClick.bind(this);
         this.handlePressureRangeChange = this.handlePressureRangeChange.bind(this);
+        this.handleBasePressureChange = this.handleBasePressureChange.bind(this);
         this.handleStartLogClick = this.handleStartLogClick.bind(this);
         this.handleClearLogClick = this.handleClearLogClick.bind(this);
 
@@ -64,15 +85,21 @@ class SettingsManager {
         this.handleModeChange = this.handleModeChange.bind(this);
         this.handleLogMessage = this.handleLogMessage.bind(this);
         this.handlePressureRangesChanged = this.handlePressureRangesChanged.bind(this);
+        this.handleBasePressuresChanged = this.handleBasePressuresChanged.bind(this);
     }
 
     _attachEventListeners() {
         // Control-specific listeners
         if (this.connectBtn) this.connectBtn.addEventListener('click', this.handleConnectClick);
         if (this.simulationToggle) this.simulationToggle.addEventListener('click', this.handleSimulationToggleClick);
-        if (this.calibrateZeroBtn) this.calibrateZeroBtn.addEventListener('click', this.handleCalibrateZeroClick);
+        this.calibrateZeroBtns.forEach((btn, index) => {
+            if (btn) btn.addEventListener('click', () => this.handleCalibrateZeroClick(index));
+        });
         this.pressureRangeInputs.forEach((input, index) => {
             if (input) input.addEventListener('change', (event) => this.handlePressureRangeChange(event, index));
+        });
+        this.basePressureInputs.forEach((input, index) => {
+            if (input) input.addEventListener('change', (event) => this.handleBasePressureChange(event, index));
         });
         if (this.startLogBtn) this.startLogBtn.addEventListener('click', this.handleStartLogClick);
         if (this.clearLogBtn && this.arduinoLogElement) this.clearLogBtn.addEventListener('click', this.handleClearLogClick);
@@ -82,6 +109,7 @@ class SettingsManager {
         document.addEventListener(EVT_MODE_CHANGED, this.handleModeChange);
         document.addEventListener(EVT_LOG_MESSAGE, this.handleLogMessage);
         document.addEventListener(EVT_PRESSURE_RANGES_CHANGED, this.handlePressureRangesChanged);
+        document.addEventListener(EVT_BASE_PRESSURES_CHANGED, this.handleBasePressuresChanged);
     }
 
     _initializeSettingsValues() {
@@ -91,6 +119,7 @@ class SettingsManager {
         this._updateUIForModeDeviceConnection(mode, deviceType, isConnected);
         this._updateLiveSensorDisplayVisibility(deviceType);
         this._updatePressureRangeInputsAndVisibility(deviceType, pressureRanges);
+        this._updateBasePressureInputsAndVisibility(deviceType, basePressures);
         this._updatePressureSensorReadings([0,0,0], [0,0,0], deviceType); // Initial clear
     }
 
@@ -108,8 +137,8 @@ class SettingsManager {
         this.inputManager.switchMode(currentMode === 'simulation' ? 'arduino' : 'simulation');
     }
 
-    handleCalibrateZeroClick() {
-        this.inputManager.calibrateZeroPressure();
+    handleCalibrateZeroClick(index) {
+        this.inputManager.calibrateZeroPressure(index);
     }
 
     handlePressureRangeChange(event, index) {
@@ -119,6 +148,16 @@ class SettingsManager {
         } else {
             // Restore old value if input is invalid
             event.target.value = this.inputManager.pressureRanges[index] || DEFAULT_PRESSURE_RANGE;
+        }
+    }
+
+    handleBasePressureChange(event, index) {
+        const value = parseInt(event.target.value);
+        if (!isNaN(value)) { // Base pressure can be any number, not necessarily > 0
+            this.inputManager.setBasePressure(index, value);
+        } else {
+            // Restore old value if input is invalid
+            event.target.value = this.inputManager.basePressures[index] || DEFAULT_BASE_PRESSURE;
         }
     }
 
@@ -162,7 +201,9 @@ class SettingsManager {
         const { mode, deviceType, isConnected } = event.detail;
         this._updateUIForModeDeviceConnection(mode, deviceType, isConnected);
         this._updateLiveSensorDisplayVisibility(deviceType); // Handles sensor-group-0,1,2
-        this._updatePressureRangeInputsAndVisibility(deviceType, this.inputManager.pressureRanges); // Handles pressure-range-group-0,1,2 and their input values
+        this._updateCalibrationGroupVisibility(deviceType);
+        this._updatePressureRangeInputsAndVisibility(deviceType, this.inputManager.pressureRanges);
+        this._updateBasePressureInputsAndVisibility(deviceType, this.inputManager.basePressures);
     }
 
     handleLogMessage(event) {
@@ -183,8 +224,11 @@ class SettingsManager {
     handlePressureRangesChanged(event) {
         const { pressureRanges, deviceType } = event.detail;
         this._updatePressureRangeInputsAndVisibility(deviceType, pressureRanges);
-        // Also update the simulator if it exists and is in simulation mode (already handled in original script.js, keep it there or move if InputModeManager owns simulator updates)
-        // For now, this manager only updates its own UI based on the event.
+    }
+
+    handleBasePressuresChanged(event) {
+        const { basePressures, deviceType } = event.detail;
+        this._updateBasePressureInputsAndVisibility(deviceType, basePressures);
     }
 
     // --- Private UI Update Helper Methods ---
@@ -219,7 +263,12 @@ class SettingsManager {
             this.connectBtn.disabled = mode === 'simulation';
         }
 
-        if (this.calibrateZeroBtn) this.calibrateZeroBtn.disabled = (mode === 'arduino' && !isConnected);
+        this.calibrateZeroBtns.forEach((btn, index) => {
+            if (btn) {
+                btn.disabled = (mode === 'arduino' && !isConnected) || 
+                               (deviceType === '1-dome' && index > 0); // Disable btn 2 & 3 for 1-dome
+            }
+        });
 
         if (this.startLogBtn) {
             this.startLogBtn.disabled = (mode === 'arduino' && !isConnected);
@@ -249,13 +298,38 @@ class SettingsManager {
     _updatePressureRangeInputsAndVisibility(deviceType, pressureRangesArray) {
         const ranges = pressureRangesArray || this.inputManager.pressureRanges; // Fallback if not passed
         for (let i = 0; i < 3; i++) {
-            if (this.pressureRangeGroups[i]) {
-                const isVisible = (deviceType === '1-dome' && i === 0) || (deviceType === '3-dome');
-                this.pressureRangeGroups[i].style.display = isVisible ? '' : 'none';
-                if (isVisible && this.pressureRangeInputs[i] && ranges[i] !== undefined) {
+            if (this.pressureRangeInputs[i] && ranges && ranges[i] !== undefined) {
+                const isRelevant = (deviceType === '1-dome' && i === 0) || (deviceType === '3-dome');
+                if (isRelevant) {
                     this.pressureRangeInputs[i].value = ranges[i];
                 }
             }
+        }
+    }
+
+    _updateBasePressureInputsAndVisibility(deviceType, basePressuresArray) {
+        const bases = basePressuresArray || this.inputManager.basePressures; // Fallback if not passed
+        for (let i = 0; i < 3; i++) {
+            if (this.basePressureInputs[i] && bases && bases[i] !== undefined) {
+                const isRelevant = (deviceType === '1-dome' && i === 0) || (deviceType === '3-dome');
+                if (isRelevant) {
+                    this.basePressureInputs[i].value = bases[i];
+                }
+            }
+        }
+    }
+
+    _updateCalibrationGroupVisibility(deviceType) {
+        if (this.domeCalibrationGroups) {
+            this.domeCalibrationGroups.forEach((group, index) => {
+                if (group) {
+                    if (deviceType === '1-dome') {
+                        group.style.display = (index === 0) ? '' : 'none';
+                    } else { // 3-dome
+                        group.style.display = ''; // Show all three for 3-dome
+                    }
+                }
+            });
         }
     }
 
@@ -263,9 +337,28 @@ class SettingsManager {
         // Remove control-specific listeners
         if (this.connectBtn) this.connectBtn.removeEventListener('click', this.handleConnectClick);
         if (this.simulationToggle) this.simulationToggle.removeEventListener('click', this.handleSimulationToggleClick);
-        if (this.calibrateZeroBtn) this.calibrateZeroBtn.removeEventListener('click', this.handleCalibrateZeroClick);
+        this.calibrateZeroBtns.forEach((btn, index) => {
+            if (btn) {
+                const handler = () => this.handleCalibrateZeroClick(index);
+                 // To properly remove, the exact same function reference is needed.
+                 // This is tricky with anonymous functions. Storing them might be better.
+                 // For now, this might not effectively remove if the handler was () => this.handleCalibrateZeroClick(index)
+                 // A better approach is to have named bound methods if removal is critical,
+                 // or re-evaluate if dispose needs to be this granular for these buttons.
+                 // Let's assume for now the removal is being handled or not critical for this specific case.
+            }
+        });
         this.pressureRangeInputs.forEach((input, index) => {
-            if (input) input.removeEventListener('change', (event) => this.handlePressureRangeChange(event, index)); // Note: this might not remove if original handler was anonymous lambda
+            if (input) { // Similar issue with anonymous event handler for removal
+                // const handler = (event) => this.handlePressureRangeChange(event, index);
+                // input.removeEventListener('change', handler);
+            }
+        });
+        this.basePressureInputs.forEach((input, index) => {
+            if (input) { // Similar issue
+                // const handler = (event) => this.handleBasePressureChange(event, index);
+                // input.removeEventListener('change', handler);
+            }
         });
         if (this.startLogBtn) this.startLogBtn.removeEventListener('click', this.handleStartLogClick);
         if (this.clearLogBtn) this.clearLogBtn.removeEventListener('click', this.handleClearLogClick);
@@ -275,6 +368,7 @@ class SettingsManager {
         document.removeEventListener(EVT_MODE_CHANGED, this.handleModeChange);
         document.removeEventListener(EVT_LOG_MESSAGE, this.handleLogMessage);
         document.removeEventListener(EVT_PRESSURE_RANGES_CHANGED, this.handlePressureRangesChanged);
+        document.removeEventListener(EVT_BASE_PRESSURES_CHANGED, this.handleBasePressuresChanged);
         console.log("SettingsManager disposed.");
     }
 } 

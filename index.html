@@ -306,19 +306,43 @@
                             </div>
                         </div>
                         <div class="calibration-controls" style="margin-top: 15px;">
-                            <button class="log-btn" id="calibrateZeroBtn" style="margin-bottom: 10px;">Calibrate Zero Pressure</button>
-                            <!-- Pressure Range Inputs -->
-                            <div class="setting-item pressure-range-setting" id="pressure-range-group-0">
-                                <label for="pressureRangeInput0" style="margin-bottom: 0;">Pressure Range 1 (Pa):</label>
-                                <input type="number" id="pressureRangeInput0" value="5000" style="flex-grow: 1; padding: 5px;">
+                            <!-- Dome 1 Calibration Row -->
+                            <div class="dome-calibration-group" id="dome-calibration-group-0">
+                                <div class="calibration-item">
+                                    <label for="basePressureInput0">Base P1 (Pa):</label>
+                                    <input type="number" id="basePressureInput0" value="101300">
+                                </div>
+                                <div class="calibration-item">
+                                    <label for="pressureRangeInput0">Range 1 (Pa):</label>
+                                    <input type="number" id="pressureRangeInput0" value="5000">
+                                </div>
+                                <button class="log-btn calibrate-btn" id="calibrateZeroBtn0">Calibrate 1</button>
                             </div>
-                            <div class="setting-item pressure-range-setting" id="pressure-range-group-1" style="display: none;">
-                                <label for="pressureRangeInput1" style="margin-bottom: 0;">Pressure Range 2 (Pa):</label>
-                                <input type="number" id="pressureRangeInput1" value="5000" style="flex-grow: 1; padding: 5px;">
+
+                            <!-- Dome 2 Calibration Row -->
+                            <div class="dome-calibration-group" id="dome-calibration-group-1" style="display: none;">
+                                <div class="calibration-item">
+                                    <label for="basePressureInput1">Base P2 (Pa):</label>
+                                    <input type="number" id="basePressureInput1" value="101300">
+                                </div>
+                                <div class="calibration-item">
+                                    <label for="pressureRangeInput1">Range 2 (Pa):</label>
+                                    <input type="number" id="pressureRangeInput1" value="5000">
+                                </div>
+                                <button class="log-btn calibrate-btn" id="calibrateZeroBtn1">Calibrate 2</button>
                             </div>
-                            <div class="setting-item pressure-range-setting" id="pressure-range-group-2" style="display: none;">
-                                <label for="pressureRangeInput2" style="margin-bottom: 0;">Pressure Range 3 (Pa):</label>
-                                <input type="number" id="pressureRangeInput2" value="5000" style="flex-grow: 1; padding: 5px;">
+
+                            <!-- Dome 3 Calibration Row -->
+                            <div class="dome-calibration-group" id="dome-calibration-group-2" style="display: none;">
+                                <div class="calibration-item">
+                                    <label for="basePressureInput2">Base P3 (Pa):</label>
+                                    <input type="number" id="basePressureInput2" value="101300">
+                                </div>
+                                <div class="calibration-item">
+                                    <label for="pressureRangeInput2">Range 3 (Pa):</label>
+                                    <input type="number" id="pressureRangeInput2" value="5000">
+                                </div>
+                                <button class="log-btn calibrate-btn" id="calibrateZeroBtn2">Calibrate 3</button>
                             </div>
                         </div>
                     </div>

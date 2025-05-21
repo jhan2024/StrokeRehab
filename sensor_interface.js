@@ -9,11 +9,16 @@ class ArduinoConnection {
     constructor(dataHandlerCallback, statusHandlerCallback) {
         this.port = null;
         this.reader = null;
+        this.writer = null; // Though not used for sending, keep for completeness
+        this.keepReading = false;
         this.isConnected = false;
-        // this.isWebSerialSupported = 'serial' in navigator; // This should be checked by the calling module (InputModeManager)
-                                                            // or passed in, to keep this class more focused.
-                                                            // For now, keeping it to reduce initial refactoring.
-        this.isWebSerialSupported = 'serial' in navigator || (window._realNavigatorSerial !== undefined && window._realNavigatorSerial !== null);
+        this.isConnecting = false; // Flag to prevent multiple connection attempts
+        this.currentMode = null; // 'arduino' or 'simulation'
+        this.latestRawPressures = []; // Store latest raw pressures
+
+        // Calibration parameters (will be set by InputModeManager via setCalibrationParameters)
+        this.baseValues = [DEFAULT_BASE_PRESSURE, DEFAULT_BASE_PRESSURE, DEFAULT_BASE_PRESSURE]; // Default base pressures for 3 domes
+        this.rangeValues = [DEFAULT_PRESSURE_RANGE, DEFAULT_PRESSURE_RANGE, DEFAULT_PRESSURE_RANGE]; // Default pressure ranges for 3 domes
 
         this.dataHandler = dataHandlerCallback;
         this.statusHandler = statusHandlerCallback;
@@ -34,11 +39,11 @@ class ArduinoConnection {
 
     async connect(mode) {
         const useSimulator = mode === 'simulation';
-        const serialSource = useSimulator ? null : window._realNavigatorSerial; 
+        this.currentMode = mode; // Store the mode
 
         console.log(`ArduinoConnection.connect called with mode: ${mode}`);
 
-        if (!useSimulator && !serialSource) {
+        if (!useSimulator && !window._realNavigatorSerial) {
              console.error('Arduino Mode Error: Real Web Serial API not available.');
              this.statusHandler('Real Web Serial API not supported or available.', 'error');
              return false;
@@ -60,7 +65,7 @@ class ArduinoConnection {
                 console.log("Simulator port assigned and confirmed open.");
             } else {
                 console.log("Requesting REAL serial port from user...");
-                this.port = await serialSource.requestPort(); 
+                this.port = await window._realNavigatorSerial.requestPort();
                 console.log("Real port received:", this.port);
                 await this.port.open({ baudRate: 9600 });
                 console.log("Real port opened.");
@@ -68,7 +73,7 @@ class ArduinoConnection {
 
             this.isConnected = true;
             this.statusHandler(useSimulator ? 'Simulator connected successfully!' : 'Device connected successfully!', 'success');
-            this.startReading(); 
+            this.startReading();
             return true;
 
         } catch (error) {
@@ -79,7 +84,7 @@ class ArduinoConnection {
              }
              this.statusHandler(message, 'error');
              this.isConnected = false;
-             this.port = null; 
+             this.port = null;
              return false;
         }
     }
@@ -187,22 +192,14 @@ class ArduinoConnection {
                             const validatedRawPressures = [];
                             const normalizedForces = [];
                             
-                            const defaultBase = DEFAULT_BASE_PRESSURE;
-                            const defaultRange = DEFAULT_PRESSURE_RANGE;
+                            // Use internal calibration values
+                            const currentBaseValues = this.baseValues || [DEFAULT_BASE_PRESSURE, DEFAULT_BASE_PRESSURE, DEFAULT_BASE_PRESSURE];
+                            const currentRangeValues = this.rangeValues || [DEFAULT_PRESSURE_RANGE, DEFAULT_PRESSURE_RANGE, DEFAULT_PRESSURE_RANGE];
 
                             for (let i = 0; i < 3; i++) {
                                 let currentRawP = incomingRawPressures[i];
-                                let baseP = defaultBase;
-                                let rangeP = defaultRange;
-
-                                if (window.inputManager) {
-                                    if (window.inputManager.basePressures && window.inputManager.basePressures[i] !== undefined) {
-                                        baseP = window.inputManager.basePressures[i];
-                                    }
-                                    if (window.inputManager.pressureRanges && window.inputManager.pressureRanges[i] !== undefined) {
-                                        rangeP = window.inputManager.pressureRanges[i];
-                                    }
-                                }
+                                let baseP = currentBaseValues[i] !== undefined ? currentBaseValues[i] : DEFAULT_BASE_PRESSURE;
+                                let rangeP = currentRangeValues[i] !== undefined ? currentRangeValues[i] : DEFAULT_PRESSURE_RANGE;
 
                                 // Data validation
                                 if (currentRawP < baseP * 0.80 && this.lastGoodRawPressures[i] !== null) {
@@ -221,18 +218,18 @@ class ArduinoConnection {
                         } else {
                             // Fallback for 1-dome old single float format if JSON is not recognized above
                             const incomingSingleRawValue = parseFloat(line); // Attempt to parse the original line string
-                            if (!isNaN(incomingSingleRawValue) && window.inputManager && window.inputManager.currentDeviceType === '1-dome') {
+                            // Check currentDeviceType from InputModeManager (if available) OR rely on calibration array length
+                            const isLikelyOneDome = (this.baseValues && this.baseValues.length === 1) || 
+                                                  (window.inputManager && window.inputManager.currentDeviceType === '1-dome');
+
+                            if (!isNaN(incomingSingleRawValue) && isLikelyOneDome) {
                                 console.warn("Received JSON but not in expected multi-dome format, attempting 1-dome single float parse:", line);
                                 let currentRawP = incomingSingleRawValue;
-                                let basePressure = DEFAULT_BASE_PRESSURE; // Default
-                                let pressureRange = DEFAULT_PRESSURE_RANGE;  // Default
-
-                                if (window.inputManager.basePressures && window.inputManager.basePressures[0] !== undefined) {
-                                    basePressure = window.inputManager.basePressures[0];
-                                }
-                                if (window.inputManager.pressureRanges && window.inputManager.pressureRanges[0] !== undefined) {
-                                    pressureRange = window.inputManager.pressureRanges[0];
-                                }
+                                
+                                const currentBaseValues = this.baseValues || [DEFAULT_BASE_PRESSURE];
+                                const currentRangeValues = this.rangeValues || [DEFAULT_PRESSURE_RANGE];
+                                let basePressure = currentBaseValues[0] !== undefined ? currentBaseValues[0] : DEFAULT_BASE_PRESSURE;
+                                let pressureRange = currentRangeValues[0] !== undefined ? currentRangeValues[0] : DEFAULT_PRESSURE_RANGE;
 
                                 // Data validation for 1-dome
                                 if (currentRawP < basePressure * 0.80 && this.lastGoodRawPressures[0] !== null) {
@@ -252,18 +249,17 @@ class ArduinoConnection {
                     } catch (e) {
                         // Fallback for non-JSON data, likely 1-dome old single float format
                         const incomingSingleRawValue = parseFloat(line);
-                        if (!isNaN(incomingSingleRawValue) && window.inputManager && window.inputManager.currentDeviceType === '1-dome') {
+                        const isLikelyOneDomeNonJson = (this.baseValues && this.baseValues.length === 1) ||
+                                                     (window.inputManager && window.inputManager.currentDeviceType === '1-dome');
+
+                        if (!isNaN(incomingSingleRawValue) && isLikelyOneDomeNonJson) {
                             console.warn("Received non-JSON, attempting to parse as old single float format for 1-dome:", line);
                             let currentRawP = incomingSingleRawValue;
-                            let basePressure = DEFAULT_BASE_PRESSURE; // Default
-                            let pressureRange = DEFAULT_PRESSURE_RANGE;  // Default
 
-                            if (window.inputManager.basePressures && window.inputManager.basePressures[0] !== undefined) {
-                                basePressure = window.inputManager.basePressures[0];
-                            }
-                            if (window.inputManager.pressureRanges && window.inputManager.pressureRanges[0] !== undefined) {
-                                pressureRange = window.inputManager.pressureRanges[0];
-                            }
+                            const currentBaseValues = this.baseValues || [DEFAULT_BASE_PRESSURE];
+                            const currentRangeValues = this.rangeValues || [DEFAULT_PRESSURE_RANGE];
+                            let basePressure = currentBaseValues[0] !== undefined ? currentBaseValues[0] : DEFAULT_BASE_PRESSURE;
+                            let pressureRange = currentRangeValues[0] !== undefined ? currentRangeValues[0] : DEFAULT_PRESSURE_RANGE;
 
                             // Data validation for 1-dome (non-JSON path)
                             if (currentRawP < basePressure * 0.80 && this.lastGoodRawPressures[0] !== null) {
@@ -293,5 +289,35 @@ class ArduinoConnection {
             } 
         }
         console.log("Exited read loop.");
+    }
+
+    // Method for InputModeManager to set initial calibration parameters
+    setCalibrationParameters(baseValues, rangeValues) {
+        if (Array.isArray(baseValues)) {
+            this.baseValues = [...baseValues]; // Create a copy
+        }
+        if (Array.isArray(rangeValues)) {
+            this.rangeValues = [...rangeValues];
+        }
+        console.log("ArduinoConnection: Initial calibration parameters set by InputModeManager.", {base: this.baseValues, range: this.rangeValues});
+    }
+
+    // Method for InputModeManager to update calibration parameters dynamically
+    updateCalibrationParameters(baseValues, rangeValues) {
+        if (Array.isArray(baseValues)) {
+            this.baseValues = [...baseValues];
+            console.log("ArduinoConnection: Base pressures updated to:", this.baseValues);
+        }
+        if (Array.isArray(rangeValues)) {
+            this.rangeValues = [...rangeValues];
+            console.log("ArduinoConnection: Pressure ranges updated to:", this.rangeValues);
+        }
+        // No need to do anything else here if not connected or if parsing handles this dynamically.
+        // If the device itself needs a command to update these, it would go here when connected.
+    }
+
+    get isWebSerialSupported() {
+        // Correctly check for Web Serial API support
+        return !!(navigator.serial || window._realNavigatorSerial);
     }
 } 
