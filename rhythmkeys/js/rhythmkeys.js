@@ -6,6 +6,8 @@ let rhythmKeysCanvas = null;
 let rhythmKeysCtx = null;
 let isRhythmKeysGameActive = false;
 let rhythmKeysAnimationId = null;
+let rhythmKeysForceTrace = [];
+
 
 const RHYTHM_KEYS_NUM_LANES = 3;
 const RHYTHM_KEYS_LANE_WIDTH = 100; // Pixel width of each lane
@@ -162,6 +164,8 @@ function initRhythmKeys() {
 }
 
 function startRhythmKeysGame() {
+    rhythmKeysForceTrace = [];
+    window.rhythmKeysForceTrace = rhythmKeysForceTrace;
     if (!rhythmKeysCanvas || !rhythmKeysCtx) {
         console.error("Rhythm Keys: Cannot start, canvas not initialized.");
         if (!rhythmKeysCanvas) initRhythmKeys(); // Try to init if not done
@@ -196,6 +200,7 @@ function startRhythmKeysGame() {
     rhythmKeysActiveNotes = [];
     rhythmKeysNextNoteIndex = 0;
     rhythmKeysCurrentSong = RHYTHM_KEYS_SAMPLE_SONG; // Load the sample song
+    window.rhythmKeysCurrentSong = rhythmKeysCurrentSong;
     rhythmKeysSongStartTime = Date.now();
 
     if (rhythmKeysSongTitleElement) rhythmKeysSongTitleElement.textContent = rhythmKeysCurrentSong.title;
@@ -255,9 +260,12 @@ function updateRhythmKeysLogic() {
         const travelDurationMs = (RHYTHM_KEYS_HIT_ZONE_Y / RHYTHM_KEYS_NOTE_SPEED / 60) * 1000;
 
         if (currentTime >= (nextNote.time - travelDurationMs)) {
+            const timeUntilHit = nextNote.time - currentTime;
+            const startY = RHYTHM_KEYS_HIT_ZONE_Y - RHYTHM_KEYS_NOTE_SPEED * (timeUntilHit / (1000 / 60)); // Convert ms → frames
+            
             rhythmKeysActiveNotes.push({
                 lane: nextNote.lane,
-                y: 0, // Start at the top
+                y: startY, // Start at the top
                 spawnTime: currentTime, // Record when it actually spawned based on currentTime
                 missed: false,
                 alpha: 1.0
@@ -459,6 +467,15 @@ function drawRhythmKeysGame() {
 
 // NEW function to be called by game_control.js
 window.rhythmGameProcessInputs = function(forcesArray, threshold) {
+    if (isRhythmKeysGameActive) {
+        const currentTime = Date.now() - rhythmKeysSongStartTime;
+        if (Array.isArray(forcesArray)) {
+            rhythmKeysForceTrace.push({
+                time: currentTime,
+                pressure: [...forcesArray]
+            });
+        }
+    }
     if (!isRhythmKeysGameActive || !Array.isArray(forcesArray)) { // Simpler check, length check below
         // If game not active or forcesArray is malformed, ensure all lanes are inactive
         for (let i = 0; i < RHYTHM_KEYS_NUM_LANES; i++) {
