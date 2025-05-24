@@ -193,6 +193,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (typeof window.startRhythmKeysGame === 'function') {
                 rhythmKeysContainer.style.display = 'flex';
                 isRhythmKeysGameUIShown = true;
+                window.rhythmKeysForceTrace = [];
                 window.startRhythmKeysGame(); 
                 console.log("Rhythm Keys game started (game_control.js)");
             } else {
@@ -207,6 +208,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 rhythmKeysContainer.style.display = 'none';
                 isRhythmKeysGameUIShown = false;
                 console.log("Rhythm Keys game stopped (game_control.js)");
+                const exportData = {
+                    forceTrace: window.rhythmKeysForceTrace || [],
+                    expectedNotes: (window.rhythmKeysCurrentSong?.notes || []).map(n => ({
+                        time: n.time,
+                        lane: n.lane
+                    }))
+                };
+                let fileName = prompt("Please enter the save file name (without json)", `rhythmkeys_trace_${Date.now()}`);
+                if (!fileName) {
+                    alert("no filename, save file cancelled");
+                    return;
+                }
+                if (!fileName.endsWith(".json")) {
+                    fileName += ".json";
+                }
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = fileName;
+                link.click();
+                URL.revokeObjectURL(url);
             } else {
                 console.error("stopRhythmKeysGame function not found!");
             }

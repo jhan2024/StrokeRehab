@@ -1,3 +1,6 @@
 .DS_Store
 .vscode
 .cursorrules
+
+xy.json
+import_json.py
