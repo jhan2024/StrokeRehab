@@ -3,3 +3,7 @@
 .cursorrules
 
 import_json.py
+plot_segment.py
+press_classification.py
+press_detection.py
+press_segments.json

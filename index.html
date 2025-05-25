@@ -1,18 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hand Rehabilitation Device Interface</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>">
     <!-- Flappy Bird CSS -->
     <link rel="stylesheet" href="flappybird/css/main.css">
     <!-- Space Shooter CSS -->
     <link rel="stylesheet" href="spaceshooter/css/spaceshooter.css">
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- forceChart in analyze tab -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        #forceChartWrapper canvas {
+          max-height: 300px;
+          display: block;
+          margin: auto;
+        }
+      
+        #forceChartWrapper {
+          max-width: 900px;
+          margin: 40px auto;
+        }
+      </style>      
 </head>
+
 <body>
     <div class="app-container">
         <!-- Side Panel for Hardware Control -->
@@ -23,7 +40,7 @@
                 <div class="status-indicator connected">Connected</div>
                 <button class="control-btn" id="side-panel-connect-btn">Disconnect</button>
             </div>
-            
+
             <div class="control-section">
                 <h3>Touch Visualization</h3>
                 <!-- REMOVED Touch Display and Canvas -->
@@ -41,7 +58,7 @@
                         </div>
                         <div class="force-label">Force 1</div> <!-- Label can be updated by JS -->
                     </div>
-                     <!-- Placeholder for Force Bar 2 (hidden by default, managed by JS) -->
+                    <!-- Placeholder for Force Bar 2 (hidden by default, managed by JS) -->
                     <div class="force-bar-wrapper" id="force-bar-wrapper-1" style="display: none;">
                         <div class="force-bar">
                             <div class="force-level" style="height: 0%;"></div>
@@ -57,7 +74,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="control-section">
                 <h3>Settings</h3>
                 <div class="setting-item">
@@ -69,10 +86,10 @@
                     <input type="range" id="threshold" min="1" max="10" value="3">
                 </div>
             </div>
-            
+
             <button class="toggle-panel-btn">Hide Panel</button>
         </div>
-        
+
         <!-- Main Panel for Exercises and Measurement -->
         <div class="main-panel">
             <div class="tabs">
@@ -81,49 +98,55 @@
                 <button class="tab-btn" data-tab="settings">Settings</button>
                 <button class="tab-btn" data-tab="analysisTab">Analysis</button>
             </div>
-            
+
             <!-- Exercises Tab Content -->
             <div class="tab-content active" id="exercises">
                 <h2>Rehabilitation Games</h2>
                 <div class="game-selection">
                     <div class="game-card" id="flappyBirdCard">
-                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%232ecc71'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🐦%3C/text%3E%3C/svg%3E" alt="Flappy Bird Game">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%232ecc71'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🐦%3C/text%3E%3C/svg%3E"
+                            alt="Flappy Bird Game">
                         <h3>Flappy Bird</h3>
                         <p>Control using pressure inputs</p>
                         <button class="play-btn" id="playFlappyBird">Play</button>
                     </div>
                     <div class="game-card">
-                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%23e74c3c'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E%F0%9F%8F%8C%EF%B8%8F%3C/text%3E%3C/svg%3E" alt="Golf Game">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%23e74c3c'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E%F0%9F%8F%8C%EF%B8%8F%3C/text%3E%3C/svg%3E"
+                            alt="Golf Game">
                         <h3>Mini Golf</h3>
                         <p>Direction + Force control (Not Implemented)</p>
                         <button class="play-btn">Play</button>
                     </div>
                     <div class="game-card">
-                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%23f39c12'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E%F0%9F%8F%83%3C/text%3E%3C/svg%3E" alt="Subway Surf Game">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%23f39c12'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E%F0%9F%8F%83%3C/text%3E%3C/svg%3E"
+                            alt="Subway Surf Game">
                         <h3>Subway Surf</h3>
                         <p>Directional control with jumps (Not Implemented)</p>
                         <button class="play-btn">Play</button>
                     </div>
                     <div class="game-card" id="spaceShooterCard">
-                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%233498db'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🚀%3C/text%3E%3C/svg%3E" alt="Space Shooter Game">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%233498db'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🚀%3C/text%3E%3C/svg%3E"
+                            alt="Space Shooter Game">
                         <h3>Space Shooter</h3>
                         <p>Vertical control with force input</p>
                         <button class="play-btn" id="playSpaceShooter">Play</button>
                     </div>
                     <div class="game-card" id="poolGameCard">
-                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%2327ae60'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🎱%3C/text%3E%3C/svg%3E" alt="Pool Game">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%2327ae60'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🎱%3C/text%3E%3C/svg%3E"
+                            alt="Pool Game">
                         <h3>Pool Game</h3>
                         <p>Direction + Force control</p>
                         <button class="play-btn" id="playPoolGame">Play</button>
                     </div>
                     <div class="game-card" id="rhythmKeysCard">
-                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%239b59b6'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🎹%3C/text%3E%3C/svg%3E" alt="Rhythm Keys Game">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Crect width='220' height='120' fill='%239b59b6'/%3E%3Ctext x='110' y='60' font-family='Arial' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'%3E🎹%3C/text%3E%3C/svg%3E"
+                            alt="Rhythm Keys Game">
                         <h3>Rhythm Hero</h3>
                         <p>Match notes with 3-dome input</p>
                         <button class="play-btn" id="playRhythmKeys">Play</button>
                     </div>
                 </div>
-                
+
                 <!-- Flappy Bird Game Container -->
                 <div id="flappyBirdGame" style="display: none;">
                     <button id="closeFlappyBird" class="close-game-btn">Close Game</button>
@@ -145,13 +168,15 @@
                                     <!-- Pipes go here! -->
                                 </div>
                             </div>
-                            <div id="land" class="animated"><div id="debug"></div></div>
+                            <div id="land" class="animated">
+                                <div id="debug"></div>
+                            </div>
                         </div>
                     </div>
                     <div class="boundingbox" id="playerbox"></div>
                     <div class="boundingbox" id="pipebox"></div>
                 </div>
-                
+
                 <!-- Space Shooter Game Container -->
                 <div id="spaceShooterGame" style="display: none;">
                     <button id="closeSpaceShooter" class="close-game-btn">Close Game</button>
@@ -172,7 +197,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Pool Game Container -->
                 <div id="poolGameContainer" style="display: none;">
                     <button id="closePoolGame" class="close-game-btn">Close Game</button>
@@ -192,14 +217,15 @@
                     <button id="closeRhythmKeys" class="close-game-btn">Close Game</button>
                     <div id="rhythm-keys-container" style="text-align: center; position: relative;">
                         <canvas id="rhythmKeysCanvas" width="600" height="700"></canvas>
-                        <div id="rhythm-keys-ui" style="position: absolute; top: 10px; left: 10px; color: white; background-color: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;">
+                        <div id="rhythm-keys-ui"
+                            style="position: absolute; top: 10px; left: 10px; color: white; background-color: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;">
                             <div>Score: <span id="rhythmKeysScore">0</span></div>
                             <div>Song: <span id="rhythmKeysSongTitle">N/A</span></div>
                         </div>
                     </div>
                 </div>
             </div>
-            
+
             <!-- Measurement Tab Content -->
             <div class="tab-content" id="measurement">
                 <h2>Measurement</h2>
@@ -228,7 +254,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Analysis Tab Content -->
             <div class="tab-content" id="analysisTab">
                 <h2>Press Pattern Analysis</h2>
@@ -236,16 +262,16 @@
                 <!-- Upload section -->
                 <input type="file" id="analysisFileInput" accept=".json" />
                 <button id="analyzeBtn" class="button start">Start Analysis</button>
-                
+
                 <!-- Flex layout container -->
                 <div class="flex-analysis">
                     <!-- Left Panel: Summary -->
                     <div id="summaryPanel" class="panel-left">
-                      <h3>📊 Summary</h3>
-                      <div id="analysisResult">Waiting for analysis...</div>
+                        <h3>📊 Summary</h3>
+                        <div id="analysisResult">Waiting for analysis...</div>
                     </div>
-                
-                    <!-- Right Panel: AI Feedback -->    
+
+                    <!-- Right Panel: AI Feedback -->
                     <div id="feedbackPanel" class="panel-right">
                         <h3>💬 AI Feedback</h3>
                         <pre id="feedbackResult" style="white-space: pre-wrap;">
@@ -253,6 +279,25 @@
                         </pre>
                     </div>
                 </div>
+
+                <!-- Place this AFTER </div> of flex-analysis -->
+                <div id="forceChartWrapper" style="margin-top: 40px; padding: 0 40px;">
+                    <h3 style="text-align:center">📈 Full Dome Press Traces</h3>
+
+                    <div style="margin-bottom: 20px;">
+                        <h4>Dome 0</h4>
+                        <canvas id="forceChart0" width="800" height="200"></canvas>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <h4>Dome 1</h4>
+                        <canvas id="forceChart1" width="800" height="200"></canvas>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <h4>Dome 2</h4>
+                        <canvas id="forceChart2" width="800" height="200"></canvas>
+                    </div>
+                </div>
+
             </div>
 
             <!-- Debug Tab Content -->
@@ -265,7 +310,8 @@
                         <div class="device-type-selector" style="margin-bottom: 10px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 500;">Device Type:</label>
                             <label for="deviceType1Dome" style="margin-right: 10px;">
-                                <input type="radio" id="deviceType1Dome" name="deviceType" value="1-dome" checked> 1-Dome
+                                <input type="radio" id="deviceType1Dome" name="deviceType" value="1-dome" checked>
+                                1-Dome
                             </label>
                             <label for="deviceType3Dome">
                                 <input type="radio" id="deviceType3Dome" name="deviceType" value="3-dome"> 3-Dome
@@ -386,7 +432,7 @@
     <script src="spaceshooter/js/spaceshooter.js"></script>
     <script src="poolgame/js/poolgame.js"></script>
     <script src="rhythmkeys/js/rhythmkeys.js"></script>
-    
+
     <!-- Main Scripts -->
     <script src="constants.js"></script>
     <script src="serial-simulator.js"></script>
@@ -398,4 +444,5 @@
     <script src="script.js"></script>
     <script src="img-placeholders.js"></script>
 </body>
-</html> 
+
+</html>

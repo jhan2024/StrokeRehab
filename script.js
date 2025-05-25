@@ -1,3 +1,7 @@
+// Register the annotation plugin
+Chart.register(window['chartjs-plugin-annotation']);
+console.log(Chart.registry.plugins.items);
+
 document.addEventListener('DOMContentLoaded', function () {
 
 
@@ -289,43 +293,44 @@ document.addEventListener('DOMContentLoaded', function () {
                     const summary = data.summary;
 
                     // Create HTML for the summary section
-                    const summaryHTML = `
-                     <li>Normal: ${summary.normal}</li>
-                     <li>Too Weak: ${summary.too_weak}</li>
-                    `;
+                    const summaryHTML = Object.entries(summary).map(([tag, count]) => {
+                        const label = tag.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); // optional: format nicely
+                        return `<li>${label}: ${count}</li>`;
+                    }).join('');
 
                     // Inject the generated HTML into the result container
                     document.getElementById("analysisResult").innerHTML = summaryHTML;
-                    
+
                     // Start fetching feedback from backend using the generated prompt
                     const prompt = data.prompt;
                     if (!prompt) {
                         document.getElementById("feedbackResult").textContent = "No prompt was generated.";
                         return;
                     }
-        
+
                     // Stream feedback from Ollama
                     fetch("http://127.0.0.1:5000/feedback", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ prompt: prompt })
                     })
-                    .then(res => {
-                        const reader = res.body.getReader();
-                        const decoder = new TextDecoder("utf-8");
-                        let output = "";
-        
-                        function read() {
-                            return reader.read().then(({ done, value }) => {
-                                if (done) return;
-                                output += decoder.decode(value, { stream: true });
-                                document.getElementById("feedbackResult").textContent = output;
-                                return read();
-                            });
-                        }
-        
-                        return read();
-                    });   
+                        .then(res => {
+                            const reader = res.body.getReader();
+                            const decoder = new TextDecoder("utf-8");
+                            let output = "";
+
+                            function read() {
+                                return reader.read().then(({ done, value }) => {
+                                    if (done) return;
+                                    output += decoder.decode(value, { stream: true });
+                                    document.getElementById("feedbackResult").textContent = output;
+                                    return read();
+                                });
+                            }
+
+                            return read();
+                        });
+                    plotForceChart(data.forceTrace, data.expectedNotes);
                 })
                 .catch(error => {
                     console.error("Request Failed：", error);
@@ -337,3 +342,62 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
 });
+
+function plotForceChart(forceTrace, expectedNotes) {
+    const times = forceTrace.map(p => p.time);
+
+    for (let lane = 0; lane < 3; lane++) {
+        const pressures = forceTrace.map(p => p.pressure[lane]);
+        const ctx = document.getElementById(`forceChart${lane}`).getContext('2d');
+
+        // Generate expected note lines for this lane
+        const noteLines = {};
+
+        expectedNotes
+            .filter(note => note.lane === lane)
+            .forEach((note, idx) => {
+                noteLines[`note${idx}`] = {
+                    type: 'line',
+                    scaleID: 'x',
+                    borderColor: 'gray',
+                    borderWidth: 1,
+                    borderDash: [4, 4],
+                    value: note.time
+                };
+            });
+
+
+        console.log("Note lines for lane", lane, noteLines);  // ✅ debug print
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: times,
+                datasets: [{
+                    label: `Dome ${lane}`,
+                    data: pressures,
+                    borderColor: ['red', 'green', 'blue'][lane],
+                    fill: false,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { type: 'linear', title: { display: true, text: 'Time (ms)' } },
+                    y: { min: 0, max: 1, title: { display: true, text: 'Pressure' } }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `Dome ${lane} Force Trace`
+                    },
+                    annotation: {
+                        annotations: noteLines
+                    }
+                }
+            }
+        });
+    }
+}   
