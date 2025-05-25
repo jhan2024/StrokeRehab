@@ -79,6 +79,7 @@
                 <button class="tab-btn active" data-tab="exercises">Gamified Exercises</button>
                 <button class="tab-btn" data-tab="measurement">Measurement</button>
                 <button class="tab-btn" data-tab="settings">Settings</button>
+                <button class="tab-btn" data-tab="analysisTab">Analysis</button>
             </div>
             
             <!-- Exercises Tab Content -->
@@ -228,6 +229,32 @@
                 </div>
             </div>
             
+            <!-- Analysis Tab Content -->
+            <div class="tab-content" id="analysisTab">
+                <h2>Press Pattern Analysis</h2>
+
+                <!-- Upload section -->
+                <input type="file" id="analysisFileInput" accept=".json" />
+                <button id="analyzeBtn" class="button start">Start Analysis</button>
+                
+                <!-- Flex layout container -->
+                <div class="flex-analysis">
+                    <!-- Left Panel: Summary -->
+                    <div id="summaryPanel" class="panel-left">
+                      <h3>📊 Summary</h3>
+                      <div id="analysisResult">Waiting for analysis...</div>
+                    </div>
+                
+                    <!-- Right Panel: AI Feedback -->    
+                    <div id="feedbackPanel" class="panel-right">
+                        <h3>💬 AI Feedback</h3>
+                        <pre id="feedbackResult" style="white-space: pre-wrap;">
+                        Waiting for AI feedback...
+                        </pre>
+                    </div>
+                </div>
+            </div>
+
             <!-- Debug Tab Content -->
             <div class="tab-content" id="settingsContent">
                 <h2>Device Settings</h2>

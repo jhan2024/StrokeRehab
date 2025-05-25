@@ -711,6 +711,32 @@ body {
     transition: background-color 0.3s;
 }
 
+/* Analyze Tab */
+.flex-analysis {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  
+.panel-left, .panel-right {
+    flex: 1;
+    background: rgb(255, 255, 255);
+    border-radius: 8px;
+    padding: 1em;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    min-height: 200px;
+}
+  
+#feedbackResult {
+    background-color: rgb(255, 255, 255);
+    border-left: 4px solid #bbbbbb;
+    padding: 10px;
+    border-radius: 6px;
+    font-style: italic;
+    font-size: 1rem;
+}
+  
+
 .mode-switch:hover {
     background-color: #34495e;
 }

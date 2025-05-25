@@ -1,11 +1,11 @@
-document.addEventListener('DOMContentLoaded', function() {
-    
+document.addEventListener('DOMContentLoaded', function () {
+
 
 
     // Tab Switching
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
-    
+
     // Function to switch tabs
     function switchTab(tabId) {
         document.querySelectorAll('.tab-content').forEach(content => {
@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             console.warn(`Tab content not found for ID: ${tabElementId}`);
         }
-        
+
         const buttonToActivate = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
         if (buttonToActivate) {
             buttonToActivate.classList.add('active'); // Activate the selected tab button
@@ -44,12 +44,12 @@ document.addEventListener('DOMContentLoaded', function() {
             switchTab(button.getAttribute('data-tab'));
         });
     });
-    
+
     // Side Panel Toggle
     const togglePanelBtn = document.querySelector('.toggle-panel-btn');
     const sidePanel = document.querySelector('.side-panel');
     const mainPanel = document.querySelector('.main-panel');
-    
+
     togglePanelBtn.addEventListener('click', () => {
         sidePanel.classList.toggle('hidden');
         if (sidePanel.classList.contains('hidden')) {
@@ -60,23 +60,23 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             sidePanel.style.marginLeft = '0';
             mainPanel.style.width = 'calc(100% - 280px)';
-             mainPanel.style.marginLeft = '0'; // Ensure main panel doesn't shift unexpectedly
+            mainPanel.style.marginLeft = '0'; // Ensure main panel doesn't shift unexpectedly
             togglePanelBtn.textContent = 'Hide Panel';
         }
     });
-    
+
     // --- Initialize Input Manager --- (Instantiation remains here)
     const inputManager = new InputModeManager();
     window.inputManager = inputManager; // Keep global ref if needed
 
     // ---> Global variable for game access (now an array) <---
-    window.latestNormalizedForces = [0]; 
+    window.latestNormalizedForces = [0];
 
     // --- UI Element References (Cached for script.js specific needs) ---
     const sidePanelConnectBtn = document.getElementById('side-panel-connect-btn');
     const sidePanelStatusIndicator = document.querySelector('.side-panel .status-indicator');
     const statusMessageContainer = document.body; // Or a dedicated container
-    
+
     // Force Bar UI elements (Side Panel - these are specific to script.js control)
     const forceLevelsContainer = document.getElementById('force-levels-container');
     const forceBarWrappers = [
@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', function() {
     ];
     const forceLevels = forceBarWrappers.map(fw => fw ? fw.querySelector('.force-level') : null);
     const forceLabels = forceBarWrappers.map(fw => fw ? fw.querySelector('.force-label') : null);
-    
+
     // Instantiate MeasurementManager after InputModeManager
     const measurementManager = new MeasurementManager(inputManager);
     window.measurementManager = measurementManager; // Optional: make it global for debugging
@@ -111,10 +111,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // SettingsManager handles live sensor readings in Settings Tab.
     // MeasurementManager handles data recording if active.
     document.addEventListener(EVT_FORCE_UPDATE, (event) => {
-        const { forces, rawPressures, deviceType } = event.detail; 
-        
+        const { forces, rawPressures, deviceType } = event.detail;
+
         window.latestNormalizedForces = forces; // Update global forces array for any game/component that might still use it directly
-        
+
         // Update Side Panel Visualization (remains in script.js as it's not part of Settings or Measurement Tab)
         updateSidePanelVisuals(forces, deviceType, window.inputManager ? window.inputManager.currentMode : 'arduino');
     });
@@ -125,26 +125,26 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener(EVT_MODE_CHANGED, (event) => {
         const { mode, deviceType, isConnected } = event.detail;
         console.log(`UI Listener (script.js for Side Panel): Mode changed to ${mode}, Device: ${deviceType}, Connected: ${isConnected}`);
-        
+
         // Update Side Panel visuals based on device type change (remains in script.js)
-        updateSidePanelVisuals(window.latestNormalizedForces || (deviceType === '1-dome' ? [0] : [0,0,0]), deviceType, mode);
+        updateSidePanelVisuals(window.latestNormalizedForces || (deviceType === '1-dome' ? [0] : [0, 0, 0]), deviceType, mode);
 
         // Update Side Panel Status Indicator and Connect Button (remains in script.js)
-        if (sidePanelStatusIndicator) { 
+        if (sidePanelStatusIndicator) {
             sidePanelStatusIndicator.textContent = mode === 'simulation' ? 'Simulated' : (isConnected ? 'Connected' : 'Disconnected');
             sidePanelStatusIndicator.className = `status-indicator ${mode === 'simulation' ? 'simulation' : (isConnected ? 'connected' : 'disconnected')}`;
         }
-        if (sidePanelConnectBtn) { 
+        if (sidePanelConnectBtn) {
             sidePanelConnectBtn.textContent = isConnected ? 'Disconnect' : (mode === 'simulation' ? 'Simulating' : 'Connect');
             // Disable connect button if in sim mode AND not already somehow connected (edge case)
             // More simply: hide if sim active, show if arduino active
-            sidePanelConnectBtn.style.display = mode === 'simulation' ? 'none' : 'block'; 
+            sidePanelConnectBtn.style.display = mode === 'simulation' ? 'none' : 'block';
             // The disabled state for sidePanelConnectBtn might need refinement if it should allow disconnect from a simulated connection shown in side panel
             // For now, if it's visible (arduino mode), its enabled state will depend on isConnected.
             // If it's hidden (sim mode), disabled state doesn't matter as much.
             sidePanelConnectBtn.disabled = (mode === 'arduino' && isConnected) ? false : (mode === 'arduino' && !isConnected ? false : true);
             if (mode === 'arduino') {
-                 sidePanelConnectBtn.disabled = false; // Always enable for user to click connect/disconnect
+                sidePanelConnectBtn.disabled = false; // Always enable for user to click connect/disconnect
             } else {
                 sidePanelConnectBtn.disabled = true; // Disable and hide in sim mode
             }
@@ -165,10 +165,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
-        
+
         console.log("Global UI (Side Panel) Updated for mode/device/connection change.");
     });
-    
+
     // --- Side Panel Visualization ---
 
     function updateSidePanelVisuals(forces, deviceType, currentInputMode) {
@@ -216,25 +216,25 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial call to set up side panel correctly based on default inputManager state
     if (window.inputManager) {
         updateSidePanelVisuals(
-            window.latestNormalizedForces, 
+            window.latestNormalizedForces,
             window.inputManager.currentDeviceType,
             window.inputManager.currentMode
         );
         // Also update side panel connect button state
         const { mode, deviceType, isConnected } = window.inputManager;
-        if (sidePanelStatusIndicator) { 
+        if (sidePanelStatusIndicator) {
             sidePanelStatusIndicator.textContent = mode === 'simulation' ? 'Simulated' : (isConnected ? 'Connected' : 'Disconnected');
             sidePanelStatusIndicator.className = `status-indicator ${mode === 'simulation' ? 'simulation' : (isConnected ? 'connected' : 'disconnected')}`;
         }
-        if (sidePanelConnectBtn) { 
+        if (sidePanelConnectBtn) {
             sidePanelConnectBtn.textContent = isConnected ? 'Disconnect' : (mode === 'simulation' ? 'Simulating' : 'Connect');
-            sidePanelConnectBtn.style.display = mode === 'simulation' ? 'none' : 'block'; 
+            sidePanelConnectBtn.style.display = mode === 'simulation' ? 'none' : 'block';
             if (mode === 'arduino') {
-                 sidePanelConnectBtn.disabled = false; 
+                sidePanelConnectBtn.disabled = false;
             } else {
-                sidePanelConnectBtn.disabled = true; 
+                sidePanelConnectBtn.disabled = true;
             }
-             // Listener for the side panel connect button (distinct from settings tab connect button)
+            // Listener for the side panel connect button (distinct from settings tab connect button)
             sidePanelConnectBtn.addEventListener('click', () => {
                 console.log('[Side Panel Button] Clicked.');
                 console.log(`[Side Panel Button] состояние InputManager: mode='${window.inputManager?.currentMode}', isConnected=${window.inputManager?.isConnected}`);
@@ -252,5 +252,88 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
+
+    // Analysis logic
+    document.getElementById("analyzeBtn").addEventListener("click", () => {
+        const file = document.getElementById("analysisFileInput").files[0];
+        if (!file) return alert("Please select a file");
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            const content = reader.result;
+            console.log("File content：", content);
+
+            // Check whether it is a legal JSON
+            try {
+                JSON.parse(content);
+            } catch (e) {
+                alert("The uploaded file is not a valid JSON!");
+                return;
+            }
+
+            // Send POST request
+            fetch("http://127.0.0.1:5000/analyze", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: content
+            })
+                .then(res => {
+                    console.log("Received response，status：", res.status);
+                    if (!res.ok) throw new Error("Server error: " + res.status);
+                    return res.json();
+                })
+                .then(data => {
+                    // Extract the summary section (total counts of each label)
+                    const summary = data.summary;
+
+                    // Create HTML for the summary section
+                    const summaryHTML = `
+                     <li>Normal: ${summary.normal}</li>
+                     <li>Too Weak: ${summary.too_weak}</li>
+                    `;
+
+                    // Inject the generated HTML into the result container
+                    document.getElementById("analysisResult").innerHTML = summaryHTML;
+                    
+                    // Start fetching feedback from backend using the generated prompt
+                    const prompt = data.prompt;
+                    if (!prompt) {
+                        document.getElementById("feedbackResult").textContent = "No prompt was generated.";
+                        return;
+                    }
+        
+                    // Stream feedback from Ollama
+                    fetch("http://127.0.0.1:5000/feedback", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ prompt: prompt })
+                    })
+                    .then(res => {
+                        const reader = res.body.getReader();
+                        const decoder = new TextDecoder("utf-8");
+                        let output = "";
+        
+                        function read() {
+                            return reader.read().then(({ done, value }) => {
+                                if (done) return;
+                                output += decoder.decode(value, { stream: true });
+                                document.getElementById("feedbackResult").textContent = output;
+                                return read();
+                            });
+                        }
+        
+                        return read();
+                    });   
+                })
+                .catch(error => {
+                    console.error("Request Failed：", error);
+                    alert("Analyze Failed：" + error.message);
+                });
+        };
+
+        reader.readAsText(file); // Correctly read JSON files as plain text
+    });
 
 });
