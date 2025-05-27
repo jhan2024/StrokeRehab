@@ -258,22 +258,25 @@
             <!-- Analysis Tab Content -->
             <div class="tab-content" id="analysisTab">
                 <h2>Press Pattern Analysis</h2>
-
                 <!-- Upload section -->
-                <input type="file" id="analysisFileInput" accept=".json" />
-                <button id="analyzeBtn" class="button start">Start Analysis</button>
-
+                
+                <div class="analysis-controls">
+                    <input type="file" id="analysisFileInput" accept=".json" />
+                    <button id="analyzeBtn" class="analyze-btn">Start Analysis</button>
+                    <span id="analysisSourceHint" style="margin-left: 10px; font-style: italic; color: gray;"></span>
+                </div>
+            
                 <!-- Flex layout container -->
                 <div class="flex-analysis">
                     <!-- Left Panel: Summary -->
                     <div id="summaryPanel" class="panel-left">
-                        <h3>📊 Summary</h3>
+                        <h3 style="margin-bottom: 20px;">📊 Summary</h3>
                         <div id="analysisResult">Waiting for analysis...</div>
                     </div>
 
                     <!-- Right Panel: AI Feedback -->
                     <div id="feedbackPanel" class="panel-right">
-                        <h3>💬 AI Feedback</h3>
+                        <h3 style="margin-bottom: 20px;">💬 AI Feedback</h3>
                         <pre id="feedbackResult" style="white-space: pre-wrap;">
                         Waiting for AI feedback...
                         </pre>
@@ -281,23 +284,25 @@
                 </div>
 
                 <!-- Place this AFTER </div> of flex-analysis -->
-                <div id="forceChartWrapper" style="margin-top: 40px; padding: 0 40px;">
-                    <h3 style="text-align:center">📈 Full Dome Press Traces</h3>
+                <div class="chart-container">
+                    <div id="forceChartWrapper" style="margin-top: 40px; padding: 0 40px;">
+                        <h3 style="text-align:center">📈 Full Dome Press Traces</h3>
 
-                    <div style="margin-bottom: 20px;">
-                        <h4>Dome 0</h4>
-                        <canvas id="forceChart0" width="800" height="200"></canvas>
+                        <div style="margin-bottom: 20px;">
+                            <h4>Dome 0</h4>
+                            <canvas id="forceChart0" width="800" height="200"></canvas>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <h4>Dome 1</h4>
+                            <canvas id="forceChart1" width="800" height="200"></canvas>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <h4>Dome 2</h4>
+                            <canvas id="forceChart2" width="800" height="200"></canvas>
+                        </div>
                     </div>
-                    <div style="margin-bottom: 20px;">
-                        <h4>Dome 1</h4>
-                        <canvas id="forceChart1" width="800" height="200"></canvas>
-                    </div>
-                    <div style="margin-bottom: 20px;">
-                        <h4>Dome 2</h4>
-                        <canvas id="forceChart2" width="800" height="200"></canvas>
-                    </div>
-                </div>
-
+                </div>    
+                
             </div>
 
             <!-- Debug Tab Content -->

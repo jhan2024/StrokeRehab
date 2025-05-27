@@ -259,96 +259,119 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Analysis logic
     document.getElementById("analyzeBtn").addEventListener("click", () => {
-        const file = document.getElementById("analysisFileInput").files[0];
-        if (!file) return alert("Please select a file");
+        const fileInput = document.getElementById("analysisFileInput");
+        const uploadedFile = fileInput.files[0];
+        const hint = document.getElementById("analysisSourceHint");
+        // Handle payload: from uploaded file OR saved game data
+        if (uploadedFile) {
+            hint.textContent = "";
+            // If user uploaded a file, read it
+            const reader = new FileReader();
+            reader.onload = () => {
+                const content = reader.result;
+                console.log("File content:", content);
 
-        const reader = new FileReader();
-        reader.onload = () => {
-            const content = reader.result;
-            console.log("File content：", content);
+                // Check whether it's valid JSON
+                let payload;
+                try {
+                    payload = JSON.parse(content);
+                } catch (e) {
+                    alert("The uploaded file is not a valid JSON!");
+                    return;
+                }
 
-            // Check whether it is a legal JSON
-            try {
-                JSON.parse(content);
-            } catch (e) {
-                alert("The uploaded file is not a valid JSON!");
-                return;
-            }
+                sendAnalysisRequest(payload);
+            };
+            reader.readAsText(uploadedFile); // Read as plain text
+        } else if (window.analysisGameData) {
+            // No file uploaded, but game data available
+            const filename = window.analysisGameDataFileName || "RhythmKeysGameData";
+            hint.textContent = `🎮 Auto: ${filename}`;
 
-            // Send POST request
-            fetch("http://127.0.0.1:5000/analyze", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: content
-            })
-                .then(res => {
-                    console.log("Received response，status：", res.status);
-                    if (!res.ok) throw new Error("Server error: " + res.status);
-                    return res.json();
-                })
-                .then(data => {
-                    // Extract the summary section (total counts of each label)
-                    const summary = data.summary;
-
-                    // Create HTML for the summary section
-                    const summaryHTML = Object.entries(summary).map(([tag, count]) => {
-                        const label = tag.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); // optional: format nicely
-                        return `<li>${label}: ${count}</li>`;
-                    }).join('');
-
-                    // Inject the generated HTML into the result container
-                    document.getElementById("analysisResult").innerHTML = summaryHTML;
-
-                    // Start fetching feedback from backend using the generated prompt
-                    const prompt = data.prompt;
-                    if (!prompt) {
-                        document.getElementById("feedbackResult").textContent = "No prompt was generated.";
-                        return;
-                    }
-
-                    // Stream feedback from Ollama
-                    fetch("http://127.0.0.1:5000/feedback", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ prompt: prompt })
-                    })
-                        .then(res => {
-                            const reader = res.body.getReader();
-                            const decoder = new TextDecoder("utf-8");
-                            let output = "";
-
-                            function read() {
-                                return reader.read().then(({ done, value }) => {
-                                    if (done) return;
-                                    output += decoder.decode(value, { stream: true });
-                                    document.getElementById("feedbackResult").textContent = output;
-                                    return read();
-                                });
-                            }
-
-                            return read();
-                        });
-                    plotForceChart(data.forceTrace, data.expectedNotes);
-                })
-                .catch(error => {
-                    console.error("Request Failed：", error);
-                    alert("Analyze Failed：" + error.message);
-                });
-        };
-
-        reader.readAsText(file); // Correctly read JSON files as plain text
+            console.log("Using in-memory game data for analysis");
+            sendAnalysisRequest(window.analysisGameData);
+        } else {
+            alert("Please upload a file or finish a rhythm game first.");
+        }
     });
 
+    // Helper function to send request and process response
+    function sendAnalysisRequest(payload) {
+        fetch("http://127.0.0.1:5000/analyze", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        })
+            .then(res => {
+                console.log("Received response, status:", res.status);
+                if (!res.ok) throw new Error("Server error: " + res.status);
+                return res.json();
+            })
+            .then(data => {
+                // Extract summary section
+                const summary = data.summary;
+                const summaryHTML = Object.entries(summary).map(([tag, count]) => {
+                    const label = tag.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    return `<li>${label}: ${count}</li>`;
+                }).join('');
+                document.getElementById("analysisResult").innerHTML = summaryHTML;
+
+                // Stream AI feedback
+                const prompt = data.prompt;
+                if (!prompt) {
+                    document.getElementById("feedbackResult").textContent = "No prompt was generated.";
+                    return;
+                }
+
+                fetch("http://127.0.0.1:5000/feedback", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ prompt })
+                })
+                    .then(res => {
+                        const reader = res.body.getReader();
+                        const decoder = new TextDecoder("utf-8");
+                        let output = "";
+
+                        function read() {
+                            return reader.read().then(({ done, value }) => {
+                                if (done) return;
+                                output += decoder.decode(value, { stream: true });
+                                document.getElementById("feedbackResult").textContent = output;
+                                return read();
+                            });
+                        }
+
+                        return read();
+                    });
+
+                // Plot chart data
+                if (typeof plotForceChart === "function") {
+                    plotForceChart(data.forceTrace, data.expectedNotes);
+                }
+            })
+            .catch(error => {
+                console.error("Request Failed:", error);
+                alert("Analyze Failed: " + error.message);
+            });
+    }
 });
 
+// Global chart instance cache
+const forceCharts = [null, null, null]; // for three domes
 function plotForceChart(forceTrace, expectedNotes) {
     const times = forceTrace.map(p => p.time);
 
     for (let lane = 0; lane < 3; lane++) {
         const pressures = forceTrace.map(p => p.pressure[lane]);
         const ctx = document.getElementById(`forceChart${lane}`).getContext('2d');
+        
+        // Destroy existing chart if needed
+        if (forceCharts[lane]) {
+            forceCharts[lane].destroy();
+        }
 
         // Generate expected note lines for this lane
         const noteLines = {};
@@ -368,13 +391,14 @@ function plotForceChart(forceTrace, expectedNotes) {
 
 
         console.log("Note lines for lane", lane, noteLines);  // ✅ debug print
-
-        new Chart(ctx, {
+        
+        // 💡 Create and store new chart instance
+        forceCharts[lane] = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: times,
                 datasets: [{
-                    label: `Dome ${lane}`,
+                    // label: `Dome ${lane}`,
                     data: pressures,
                     borderColor: ['red', 'green', 'blue'][lane],
                     fill: false,
@@ -389,8 +413,11 @@ function plotForceChart(forceTrace, expectedNotes) {
                     y: { min: 0, max: 1, title: { display: true, text: 'Pressure' } }
                 },
                 plugins: {
+                    legend: {
+                        display: false
+                    },
                     title: {
-                        display: true,
+                        display: false,
                         text: `Dome ${lane} Force Trace`
                     },
                     annotation: {

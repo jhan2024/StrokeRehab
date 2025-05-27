@@ -215,6 +215,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         lane: n.lane
                     }))
                 };
+                // Store globally for use by the analysis page
+                window.analysisGameData = exportData;
+                console.log("Saved game data to analysisGameData for later use.");
+
                 let fileName = prompt("Please enter the save file name (without json)", `rhythmkeys_trace_${Date.now()}`);
                 if (!fileName) {
                     alert("no filename, save file cancelled");
@@ -223,6 +227,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!fileName.endsWith(".json")) {
                     fileName += ".json";
                 }
+                window.analysisGameDataFileName = fileName;
                 const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');

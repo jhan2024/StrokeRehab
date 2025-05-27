@@ -728,13 +728,43 @@ body {
 }
   
 #feedbackResult {
-    background-color: rgb(255, 255, 255);
-    border-left: 4px solid #bbbbbb;
-    padding: 10px;
-    border-radius: 6px;
+    background-color: #f9f9f9;
+    border-left: 4px solid #3498db;
+    padding: 12px;
+    border-radius: 5px;
     font-style: italic;
+    color: #333;
+    font-family: 'Segoe UI', sans-serif;
+  }  
+
+/* Analysis Tab container style */
+.analysis-container {
+    background-color: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  
+  .analysis-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  
+  .analyze-btn {
+    padding: 10px 20px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
     font-size: 1rem;
-}
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+  
+  .analyze-btn:hover {
+    background-color: #2980b9;
+  }
   
 
 .mode-switch:hover {
