@@ -11,142 +11,84 @@ let rhythmKeysForceTrace = [];
 
 const RHYTHM_KEYS_NUM_LANES = 3;
 const RHYTHM_KEYS_LANE_WIDTH = 100; // Pixel width of each lane
-const RHYTHM_KEYS_NOTE_HEIGHT = 30; // Pixel height of a note
+const RHYTHM_KEYS_NOTE_HEIGHT = 30; // Pixel height of a note (NOW USED FOR HIT WINDOW TOLERANCE)
 const RHYTHM_KEYS_HIT_ZONE_Y = 600; // Y-coordinate of the hit zone
 const RHYTHM_KEYS_NOTE_SPEED = 3; // Pixels per frame notes fall
-const RHYTHM_KEYS_HIT_TARGET_RADIUS = 25; // Radius for hit zone target circles
-const RHYTHM_KEYS_NOTE_CORNER_RADIUS = 8; // Was for rounded rects, now for note circle radius
-const RHYTHM_KEYS_NOTE_RADIUS = 18; // Radius for the notes themselves
+
+// --- MODIFIED: Renamed and added new constants for target scaling ---
+const RHYTHM_KEYS_TARGET_BASE_RADIUS = 15;   // Base radius for hit zone target circles
+const RHYTHM_KEYS_TARGET_MIN_SCALE_ON_FORCE = 0.7; // Scale factor at 0 force (1.0 means base size, 0.7 means 30% smaller)
+const RHYTHM_KEYS_TARGET_MAX_SCALE_ON_FORCE = 2.0; // Scale factor at max force (1.0 means base size, 2.5 means 2.0x larger)
+
+const RHYTHM_KEYS_NOTE_CORNER_RADIUS = 8;
+const RHYTHM_KEYS_NOTE_RADIUS = 18; // Base radius for the notes themselves (for sizeFactor = 1.0)
 const RHYTHM_KEYS_NOTE_PULSE_SCALE = 0.05; // Max scale change for pulse
-let rhythmKeysGlobalTime = 0; // For animations like pulsing
+let rhythmKeysGlobalTime = 0;
 
-// --- Web Audio API Variables ---
+const RHYTHM_KEYS_NOTE_MIN_SIZE_FACTOR = 0.7;
+const RHYTHM_KEYS_NOTE_MAX_SIZE_FACTOR = 1.3;
+
+// ... (Web Audio, Audio Sample, Particle System variables remain the same) ...
 let audioContext = null;
-// const RHYTHM_KEYS_NOTE_FREQUENCIES = [261.63, 329.63, 392.00]; // C4, E4, G4 - Replaced by samples
-// const RHYTHM_KEYS_NOTE_VOLUME = 0.3; 
-// const RHYTHM_KEYS_NOTE_DURATION = 0.3; // seconds
-
-// --- Audio Sample Variables ---
 let backgroundMusic = null;
-const noteHitSamples = []; // To store AudioBuffer objects for note hits
+const noteHitSamples = [];
 const noteHitSamplePaths = [
-    'rhythmkeys/assets/audio/note_lane0.wav', // Placeholder for C4-like sound
-    'rhythmkeys/assets/audio/note_lane1.wav', // Placeholder for E4-like sound
-    'rhythmkeys/assets/audio/note_lane2.wav'  // Placeholder for G4-like sound
+    'rhythmkeys/assets/audio/note_lane0.wav',
+    'rhythmkeys/assets/audio/note_lane1.wav',
+    'rhythmkeys/assets/audio/note_lane2.wav'
 ];
-const BACKGROUND_MUSIC_PATH = 'rhythmkeys/assets/audio/rhythm_keys_bgm.ogg'; // Or .mp3, ensure this matches your file
-const NOTE_HIT_VOLUME = 0.5;
+const BACKGROUND_MUSIC_PATH = 'rhythmkeys/assets/audio/rhythm_keys_bgm.ogg';
+const NOTE_HIT_VOLUME = 0.2; // Adjusted based on previous feedback if piano was too loud
 const BACKGROUND_MUSIC_VOLUME = 0.2;
 
-// --- Particle System Variables ---
 let rhythmKeysParticles = [];
-const RHYTHM_KEYS_PARTICLE_COUNT = 20; // Number of particles per hit
-const RHYTHM_KEYS_PARTICLE_LIFESPAN = 60; // Frames
+const RHYTHM_KEYS_PARTICLE_COUNT = 20;
+const RHYTHM_KEYS_PARTICLE_LIFESPAN = 60;
 const RHYTHM_KEYS_PARTICLE_SPEED_MAX = 4;
 
-// Colors (Inspired by JS-Hero color mapping for 3 inputs)
-// Original JS-Hero: Green (A), Red (S), Yellow (D), Blue (F), Orange (G)
-const RHYTHM_KEYS_LANE_COLORS_JS_HERO = [
-    '#4CAF50', // Green-like (for Lane A)
-    '#F44336', // Red-like (for Lane S)
-    '#FFEB3B'  // Yellow-like (for Lane D)
-];
-const RHYTHM_KEYS_NOTE_COLORS_JS_HERO = [
-    '#81C784', // Lighter Green
-    '#E57373', // Lighter Red
-    '#FFF176'  // Lighter Yellow
-];
-const RHYTHM_KEYS_HIT_TARGET_ACTIVE_COLOR = '#FFFFFF'; // White for active hit target
 
-// Original colors, can be switched back if needed
-// const RHYTHM_KEYS_LANE_COLORS = ['#ff6666', '#66ff66', '#6666ff']; 
-// const RHYTHM_KEYS_NOTE_COLORS = ['#ffcccc', '#ccffcc', '#ccccff']; 
+const RHYTHM_KEYS_LANE_COLORS_JS_HERO = ['#4CAF50', '#F44336', '#FFEB3B'];
+const RHYTHM_KEYS_NOTE_COLORS_JS_HERO = ['#81C784', '#E57373', '#FFF176'];
+const RHYTHM_KEYS_HIT_TARGET_ACTIVE_COLOR = '#FFFFFF';
 
 const RHYTHM_KEYS_LANE_COLORS = RHYTHM_KEYS_LANE_COLORS_JS_HERO;
 const RHYTHM_KEYS_NOTE_COLORS = RHYTHM_KEYS_NOTE_COLORS_JS_HERO;
-
-const RHYTHM_KEYS_HIT_ZONE_COLOR = '#ffffff'; // White hit zone (base line)
+const RHYTHM_KEYS_HIT_ZONE_COLOR = '#ffffff';
 const RHYTHM_KEYS_TEXT_COLOR = '#ffffff';
 
-// Score and Song
-let rhythmKeysScore = { hits: 0, spawned: 0 }; // MODIFIED for new scoring
+let rhythmKeysScore = { hits: 0, spawned: 0 };
 let rhythmKeysCurrentSong = null;
 let rhythmKeysSongTitleElement = null;
 let rhythmKeysScoreElement = null;
-
-// Notes currently on screen
 let rhythmKeysActiveNotes = [];
+let rhythmKeysLaneActive = [false, false, false];
+let currentRhythmKeyForces = [0, 0, 0];
 
-// To store the state of key presses for visual feedback on hit targets
-let rhythmKeysLaneActive = [false, false, false]; // For A, S, D keys
-let currentRhythmKeyForces = [0, 0, 0]; // ADDED: To store current forces for visualization
-
-// Simple song data: { time: (ms from start), lane: (0, 1, or 2) }
-// Time is when the BOTTOM of the note should reach the HIT_ZONE_Y
-const RHYTHM_KEYS_SAMPLE_SONG = {
-    title: "Demo Song", // MODIFIED title
-    bpm: 120, // Beats per minute (for future use, or to calculate timings)
+const RHYTHM_KEYS_SAMPLE_SONG = { /* ... (song data remains the same) ... */
+    title: "Demo Song (Sized Keys & Targets)",
+    bpm: 120,
     notes: [
-        // Slow start - Kept as is
-        { time: 2000, lane: 1 },
-        { time: 3000, lane: 0 },
-        { time: 4000, lane: 2 },
-        { time: 5000, lane: 1 },
-
-        // A bit faster - Increased gaps slightly
-        { time: 6000, lane: 0 },
-        { time: 6800, lane: 2 }, 
-        { time: 7600, lane: 1 }, 
-        { time: 8400, lane: 0 }, 
-        { time: 9200, lane: 2 }, 
-
-        // Simple chords/doubles - Spaced out more
-        { time: 10200, lane: 0 }, { time: 10200, lane: 1 }, 
-        { time: 11500, lane: 1 }, { time: 11500, lane: 2 }, 
-        
-        // Quicker sequence - Reduced notes and increased gaps
-        { time: 12500, lane: 0 }, 
-        { time: 13300, lane: 2 }, 
-        { time: 14100, lane: 1 }, 
-
-        // More doubles - Spaced out
-        { time: 15200, lane: 0 }, { time: 15200, lane: 2 }, 
-        { time: 16300, lane: 1 }, 
-
-        { time: 17300, lane: 0 }, 
-        { time: 18100, lane: 2 }, 
-        { time: 18900, lane: 0 }, 
-
-        { time: 20000, lane: 1 }, 
-        { time: 20800, lane: 0 }, { time: 20800, lane: 2 }, 
-        { time: 21800, lane: 1 }, 
-
-        // Increasing density section - Reduced significantly
-        { time: 22800, lane: 0 }, 
-        { time: 23600, lane: 2 }, 
-        { time: 24400, lane: 1 }, 
-
-        { time: 25300, lane: 2 }, 
-
-        { time: 27000, lane: 0 }, 
-        { time: 27800, lane: 1 }, 
-        { time: 28600, lane: 2 }, 
-
-        { time: 29500, lane: 1 }, 
-        { time: 30200, lane: 0 }, 
-        { time: 30900, lane: 2 }, 
-        { time: 31700, lane: 1 }, { time: 31700, lane: 0 }, 
-        { time: 32500, lane: 1 } 
+        { time: 2000, lane: 1 }, { time: 3000, lane: 0 }, { time: 4000, lane: 2 }, { time: 5000, lane: 1 },
+        { time: 6000, lane: 0 }, { time: 6800, lane: 2 }, { time: 7600, lane: 1 }, { time: 8400, lane: 0 }, { time: 9200, lane: 2 },
+        { time: 10200, lane: 0 }, { time: 10200, lane: 1 }, { time: 11500, lane: 1 }, { time: 11500, lane: 2 },
+        { time: 12500, lane: 0 }, { time: 13300, lane: 2 }, { time: 14100, lane: 1 },
+        { time: 15200, lane: 0 }, { time: 15200, lane: 2 }, { time: 16300, lane: 1 },
+        { time: 17300, lane: 0 }, { time: 18100, lane: 2 }, { time: 18900, lane: 0 },
+        { time: 20000, lane: 1 }, { time: 20800, lane: 0 }, { time: 20800, lane: 2 }, { time: 21800, lane: 1 },
+        { time: 22800, lane: 0 }, { time: 23600, lane: 2 }, { time: 24400, lane: 1 }, { time: 25300, lane: 2 },
+        { time: 27000, lane: 0 }, { time: 27800, lane: 1 }, { time: 28600, lane: 2 },
+        { time: 29500, lane: 1 }, { time: 30200, lane: 0 }, { time: 30900, lane: 2 },
+        { time: 31700, lane: 1 }, { time: 31700, lane: 0 }, { time: 32500, lane: 1 }
     ]
 };
 let rhythmKeysSongStartTime = 0;
 let rhythmKeysNextNoteIndex = 0;
 
-
 // --- Game Functions ---
 
 function initRhythmKeys() {
-    console.log("Rhythm Keys: Initializing (not much to do yet)...");
+    // ... (remains the same)
+    console.log("Rhythm Keys: Initializing...");
     rhythmKeysCanvas = document.getElementById('rhythmKeysCanvas');
     rhythmKeysSongTitleElement = document.getElementById('rhythmKeysSongTitle');
     rhythmKeysScoreElement = document.getElementById('rhythmKeysScore');
@@ -157,180 +99,152 @@ function initRhythmKeys() {
         console.error("Rhythm Keys: Canvas element not found!");
         return;
     }
-    // Load audio assets
     loadBackgroundMusic();
     loadNoteHitSamples();
-    // Event listeners will be added in startRhythmKeysGame and removed in stop
 }
 
 function startRhythmKeysGame() {
+    // ... (remains the same)
     rhythmKeysForceTrace = [];
     window.rhythmKeysForceTrace = rhythmKeysForceTrace;
     if (!rhythmKeysCanvas || !rhythmKeysCtx) {
         console.error("Rhythm Keys: Cannot start, canvas not initialized.");
-        if (!rhythmKeysCanvas) initRhythmKeys(); // Try to init if not done
+        if (!rhythmKeysCanvas) initRhythmKeys();
         if (!rhythmKeysCanvas || !rhythmKeysCtx) return;
     }
 
     console.log("Rhythm Keys: Starting game...");
     isRhythmKeysGameActive = true;
-    rhythmKeysScore = { hits: 0, spawned: 0 }; // MODIFIED: Reset score object
+    rhythmKeysScore = { hits: 0, spawned: 0 };
 
-    // Initialize AudioContext if it hasn't been already (best on user gesture)
     if (!audioContext) {
         try {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             console.log("AudioContext initialized.");
         } catch (e) {
             console.error("Web Audio API is not supported in this browser", e);
-            // Fallback or disable audio features
         }
     }
 
-    if (backgroundMusic && backgroundMusic.readyState >= 2) { // HAVE_CURRENT_DATA or more
+    if (backgroundMusic && backgroundMusic.readyState >= 2) {
         backgroundMusic.currentTime = 0;
         backgroundMusic.loop = true;
         backgroundMusic.volume = BACKGROUND_MUSIC_VOLUME;
         backgroundMusic.play().catch(e => console.error("Error playing background music:", e));
     } else if (backgroundMusic) {
-        // If not ready, try playing once loaded (event listener in loadBackgroundMusic)
         console.log("Background music not ready, will play when loaded.");
     }
 
     rhythmKeysActiveNotes = [];
     rhythmKeysNextNoteIndex = 0;
-    rhythmKeysCurrentSong = RHYTHM_KEYS_SAMPLE_SONG; // Load the sample song
+    rhythmKeysCurrentSong = RHYTHM_KEYS_SAMPLE_SONG;
     window.rhythmKeysCurrentSong = rhythmKeysCurrentSong;
     rhythmKeysSongStartTime = Date.now();
 
     if (rhythmKeysSongTitleElement) rhythmKeysSongTitleElement.textContent = rhythmKeysCurrentSong.title;
-    if (rhythmKeysScoreElement) rhythmKeysScoreElement.textContent = `Hits: ${rhythmKeysScore.hits} / Spawned: ${rhythmKeysScore.spawned}`; // MODIFIED
+    if (rhythmKeysScoreElement) rhythmKeysScoreElement.textContent = `Hits: ${rhythmKeysScore.hits} / Spawned: ${rhythmKeysScore.spawned}`;
 
-    // Start the game loop
     if (rhythmKeysAnimationId) cancelAnimationFrame(rhythmKeysAnimationId);
     gameLoopRhythmKeys();
 }
 
 function stopRhythmKeysGame() {
+    // ... (remains the same)
     console.log("Rhythm Keys: Stopping game...");
     isRhythmKeysGameActive = false;
     if (rhythmKeysAnimationId) {
         cancelAnimationFrame(rhythmKeysAnimationId);
         rhythmKeysAnimationId = null;
     }
-    // Stop background music
     if (backgroundMusic) {
         backgroundMusic.pause();
     }
-    // Remove keyboard listeners
-    // document.removeEventListener('keydown', handleRhythmKeysInput);
-    // document.removeEventListener('keyup', handleRhythmKeysKeyRelease);
-
-    // Clear canvas (optional, or show a "Game Over" message)
     if (rhythmKeysCtx && rhythmKeysCanvas) {
         rhythmKeysCtx.clearRect(0, 0, rhythmKeysCanvas.width, rhythmKeysCanvas.height);
         rhythmKeysCtx.fillStyle = RHYTHM_KEYS_TEXT_COLOR;
         rhythmKeysCtx.font = "30px Arial";
         rhythmKeysCtx.textAlign = "center";
         rhythmKeysCtx.fillText("Game Over", rhythmKeysCanvas.width / 2, rhythmKeysCanvas.height / 2);
-        rhythmKeysCtx.fillText(`Score: ${rhythmKeysScore.hits} / ${rhythmKeysScore.spawned}`, rhythmKeysCanvas.width / 2, rhythmKeysCanvas.height / 2 + 40); // MODIFIED
+        rhythmKeysCtx.fillText(`Score: ${rhythmKeysScore.hits} / ${rhythmKeysScore.spawned}`, rhythmKeysCanvas.width / 2, rhythmKeysCanvas.height / 2 + 40);
     }
 }
 
 function gameLoopRhythmKeys() {
+    // ... (remains the same)
     if (!isRhythmKeysGameActive) return;
-
     updateRhythmKeysLogic();
     drawRhythmKeysGame();
-
-    rhythmKeysGlobalTime += 1; // Increment global time for animations
+    rhythmKeysGlobalTime += 1;
     rhythmKeysAnimationId = requestAnimationFrame(gameLoopRhythmKeys);
 }
 
 function updateRhythmKeysLogic() {
+    // ... (remains the same, including note spawning and movement)
     const currentTime = Date.now() - rhythmKeysSongStartTime;
 
     // 1. Spawn new notes
     if (rhythmKeysCurrentSong && rhythmKeysNextNoteIndex < rhythmKeysCurrentSong.notes.length) {
-        const nextNote = rhythmKeysCurrentSong.notes[rhythmKeysNextNoteIndex];
-        // Spawn a note when its time to appear at the top such that it reaches hit zone at its 'time'
-        // Note's travel time = RHYTHM_KEYS_HIT_ZONE_Y / RHYTHM_KEYS_NOTE_SPEED (frames)
-        // To convert frames to ms: (frames / FPS) * 1000. Assume 60 FPS for now.
-        // Effective spawn time = note.time - ( (RHYTHM_KEYS_HIT_ZONE_Y / RHYTHM_KEYS_NOTE_SPEED) / 60 * 1000 )
+        const nextNoteData = rhythmKeysCurrentSong.notes[rhythmKeysNextNoteIndex];
         const travelDurationMs = (RHYTHM_KEYS_HIT_ZONE_Y / RHYTHM_KEYS_NOTE_SPEED / 60) * 1000;
 
-        if (currentTime >= (nextNote.time - travelDurationMs)) {
-            const timeUntilHit = nextNote.time - currentTime;
-            const startY = RHYTHM_KEYS_HIT_ZONE_Y - RHYTHM_KEYS_NOTE_SPEED * (timeUntilHit / (1000 / 60)); // Convert ms → frames
-            
+        if (currentTime >= (nextNoteData.time - travelDurationMs)) {
+            const timeUntilHit = nextNoteData.time - currentTime;
+            const startY = RHYTHM_KEYS_HIT_ZONE_Y - RHYTHM_KEYS_NOTE_SPEED * (timeUntilHit / (1000 / 60));
+            const sizeFactor = RHYTHM_KEYS_NOTE_MIN_SIZE_FACTOR + Math.random() * (RHYTHM_KEYS_NOTE_MAX_SIZE_FACTOR - RHYTHM_KEYS_NOTE_MIN_SIZE_FACTOR);
+
             rhythmKeysActiveNotes.push({
-                lane: nextNote.lane,
-                y: startY, // Start at the top
-                spawnTime: currentTime, // Record when it actually spawned based on currentTime
-                missed: false,
-                alpha: 1.0
+                lane: nextNoteData.lane, y: startY, spawnTime: currentTime,
+                missed: false, alpha: 1.0, sizeFactor: sizeFactor
             });
-            rhythmKeysScore.spawned++; // MODIFIED: Increment spawned notes count
-            if (rhythmKeysScoreElement) rhythmKeysScoreElement.textContent = `Hits: ${rhythmKeysScore.hits} / Spawned: ${rhythmKeysScore.spawned}`; // MODIFIED: Update UI
+            rhythmKeysScore.spawned++;
+            if (rhythmKeysScoreElement) rhythmKeysScoreElement.textContent = `Hits: ${rhythmKeysScore.hits} / Spawned: ${rhythmKeysScore.spawned}`;
             rhythmKeysNextNoteIndex++;
         }
     }
 
-    // 2. Move existing notes
+    const HIT_WINDOW_RADIUS_FOR_MISS_CHECK = RHYTHM_KEYS_NOTE_HEIGHT / 2;
     for (let i = rhythmKeysActiveNotes.length - 1; i >= 0; i--) {
         let note = rhythmKeysActiveNotes[i];
         note.y += RHYTHM_KEYS_NOTE_SPEED;
-
-        // 3. Remove notes that have gone past the hit zone (missed)
-        if (note.y > RHYTHM_KEYS_HIT_ZONE_Y + RHYTHM_KEYS_NOTE_HEIGHT * 2) { // Allow some leeway
-            if (!note.missed) { // Only mark as missed once
+        if (note.y > RHYTHM_KEYS_HIT_ZONE_Y + HIT_WINDOW_RADIUS_FOR_MISS_CHECK + (RHYTHM_KEYS_NOTE_HEIGHT * 1.5) ) {
+            if (!note.missed) {
                 note.missed = true;
-                note.alpha = 1.0; // Start fade out for missed note
-                // console.log("Rhythm Keys: Note missed in lane " + note.lane);
+                note.alpha = 1.0;
             }
         }
-        // If note is marked as missed, reduce its alpha. Remove when fully transparent.
         if (note.missed) {
-            note.alpha -= 0.05; // Fade speed for missed notes
+            note.alpha -= 0.05;
             if (note.alpha <= 0) {
                 rhythmKeysActiveNotes.splice(i, 1);
             }
         }
     }
-    updateParticles(); // Update particle states
+    updateParticles();
 }
 
 function drawRhythmKeysGame() {
     if (!rhythmKeysCtx || !rhythmKeysCanvas) return;
-
-    // Clear canvas (now drawing a dynamic background)
-    // rhythmKeysCtx.fillStyle = '#000000'; 
-    // rhythmKeysCtx.fillRect(0, 0, rhythmKeysCanvas.width, rhythmKeysCanvas.height);
     drawDynamicBackground();
 
     const totalLanesWidth = RHYTHM_KEYS_NUM_LANES * RHYTHM_KEYS_LANE_WIDTH;
     const startX = (rhythmKeysCanvas.width - totalLanesWidth) / 2;
 
-    // 1. Draw Fretboard Illusion (Strings and Frets)
-    rhythmKeysCtx.strokeStyle = '#555555'; // Dark grey for frets and string base
+    // Draw Fretboard Illusion (unchanged)
+    rhythmKeysCtx.strokeStyle = '#555555';
     rhythmKeysCtx.lineWidth = 2;
-
-    // Draw horizontal fret lines (more spaced at bottom, closer at top for perspective)
     const numFrets = 10;
     for (let i = 0; i <= numFrets; i++) {
-        const y = RHYTHM_KEYS_HIT_ZONE_Y - (RHYTHM_KEYS_HIT_ZONE_Y * (Math.pow(i / numFrets, 2))) * 0.8; // Exponential spacing for perspective
+        const y = RHYTHM_KEYS_HIT_ZONE_Y - (RHYTHM_KEYS_HIT_ZONE_Y * (Math.pow(i / numFrets, 2))) * 0.8;
         if (y < 0) break;
         rhythmKeysCtx.beginPath();
         rhythmKeysCtx.moveTo(startX, y);
         rhythmKeysCtx.lineTo(startX + totalLanesWidth, y);
         rhythmKeysCtx.stroke();
     }
-    
-    // Draw Lane "Strings"
-    rhythmKeysCtx.lineWidth = 4; // Thicker lines for strings
+    rhythmKeysCtx.lineWidth = 4;
     for (let i = 0; i < RHYTHM_KEYS_NUM_LANES; i++) {
         const laneCenterX = startX + i * RHYTHM_KEYS_LANE_WIDTH + RHYTHM_KEYS_LANE_WIDTH / 2;
-        rhythmKeysCtx.strokeStyle = RHYTHM_KEYS_LANE_COLORS[i]; // Color the string itself
+        rhythmKeysCtx.strokeStyle = RHYTHM_KEYS_LANE_COLORS[i];
         rhythmKeysCtx.globalAlpha = 0.6;
         rhythmKeysCtx.beginPath();
         rhythmKeysCtx.moveTo(laneCenterX, 0);
@@ -339,134 +253,107 @@ function drawRhythmKeysGame() {
         rhythmKeysCtx.globalAlpha = 1.0;
     }
 
-    // Draw Lane Separators (thin, subtle, if needed on top of string drawing)
-    // rhythmKeysCtx.strokeStyle = '#333333'; 
-    // rhythmKeysCtx.lineWidth = 1;
-    // for (let i = 0; i <= RHYTHM_KEYS_NUM_LANES; i++) {
-    //     const x = startX + i * RHYTHM_KEYS_LANE_WIDTH;
-    //     rhythmKeysCtx.beginPath();
-    //     rhythmKeysCtx.moveTo(x, 0);
-    //     rhythmKeysCtx.lineTo(x, rhythmKeysCanvas.height);
-    //     rhythmKeysCtx.stroke();
-    // }
-
-    // 2. Draw Hit Zone Targets (JS-Hero style)
+    // --- MODIFIED: Draw Hit Zone Targets with Force Scaling ---
     const keyLabels = ['A', 'S', 'D'];
     for (let i = 0; i < RHYTHM_KEYS_NUM_LANES; i++) {
         const laneCenterX = startX + i * RHYTHM_KEYS_LANE_WIDTH + RHYTHM_KEYS_LANE_WIDTH / 2;
-        rhythmKeysCtx.beginPath();
         
-        let targetRadius = RHYTHM_KEYS_HIT_TARGET_RADIUS;
-        let targetAlpha = 0.7;
         let targetFillStyle = RHYTHM_KEYS_LANE_COLORS[i];
+        let targetAlpha = 0.7;
+        let currentTargetRadius;
 
-        if (rhythmKeysLaneActive[i]) {
-            // Immediate pop effect on key down (this relies on the key being active this frame)
-            // For a more controlled "pop" on initial press, state would be needed (e.g., rhythmKeysLaneJustPressed[i])
-            targetRadius = RHYTHM_KEYS_HIT_TARGET_RADIUS * 1.15; // Slightly larger when key is down
+        const forceValue = currentRhythmKeyForces[i] || 0; // Normalized 0-1
+
+        // Interpolate scale based on force:
+        // When force is 0, scale is MIN_SCALE. When force is 1, scale is MAX_SCALE.
+        const forceScale = RHYTHM_KEYS_TARGET_MIN_SCALE_ON_FORCE +
+                           (forceValue * (RHYTHM_KEYS_TARGET_MAX_SCALE_ON_FORCE - RHYTHM_KEYS_TARGET_MIN_SCALE_ON_FORCE));
+        
+        currentTargetRadius = RHYTHM_KEYS_TARGET_BASE_RADIUS * forceScale;
+
+        if (rhythmKeysLaneActive[i]) { // Lane is active (force met threshold)
             targetFillStyle = RHYTHM_KEYS_HIT_TARGET_ACTIVE_COLOR; 
             targetAlpha = 1.0;
             
-            // Continuous pulse while key is held (after initial pop)
+            // Continuous pulse while key is held (applied on top of force scaling)
             const pulse = Math.sin(rhythmKeysGlobalTime * 0.25) * 2; // Subtle continuous pulse
-            targetRadius += pulse;
-        } else {
-            targetFillStyle = RHYTHM_KEYS_LANE_COLORS[i]; 
-            targetAlpha = 0.7; 
+            currentTargetRadius += pulse;
         }
+        // Ensure radius doesn't become too small or negative from pulse
+        currentTargetRadius = Math.max(currentTargetRadius, RHYTHM_KEYS_TARGET_BASE_RADIUS * 0.5);
+
+
+        rhythmKeysCtx.beginPath();
         rhythmKeysCtx.globalAlpha = targetAlpha;
         rhythmKeysCtx.fillStyle = targetFillStyle;
-        rhythmKeysCtx.arc(laneCenterX, RHYTHM_KEYS_HIT_ZONE_Y, targetRadius, 0, Math.PI * 2);
+        rhythmKeysCtx.arc(laneCenterX, RHYTHM_KEYS_HIT_ZONE_Y, currentTargetRadius, 0, Math.PI * 2);
         rhythmKeysCtx.fill();
         
-        rhythmKeysCtx.strokeStyle = '#FFFFFF'; // White border for targets
+        rhythmKeysCtx.strokeStyle = '#FFFFFF'; 
         rhythmKeysCtx.lineWidth = 2;
         rhythmKeysCtx.stroke();
         rhythmKeysCtx.globalAlpha = 1.0;
 
         // Draw key labels on targets
-        rhythmKeysCtx.fillStyle = rhythmKeysLaneActive[i] ? '#333333' : '#FFFFFF'; // Dark text on active, white on inactive
-        rhythmKeysCtx.font = 'bold 18px Arial';
+        // Adjust text color based on active state, similar to before
+        rhythmKeysCtx.fillStyle = rhythmKeysLaneActive[i] ? '#333333' : '#FFFFFF';
+        rhythmKeysCtx.font = 'bold 18px Arial'; // Consider scaling text if targets get very large
         rhythmKeysCtx.textAlign = 'center';
         rhythmKeysCtx.textBaseline = 'middle';
         rhythmKeysCtx.fillText(keyLabels[i], laneCenterX, RHYTHM_KEYS_HIT_ZONE_Y);
     }
 
-    // 2.1 Draw Force Visualization Bars (NEW)
-    const forceBarMaxHeight = 40; // Max height of the visualization bar
+    // --- REMOVED/COMMENTED OUT: Force Visualization Bars ---
+    /*
+    const forceBarMaxHeight = 40;
     const forceBarWidth = 20;
-    const forceBarYOffset = RHYTHM_KEYS_HIT_TARGET_RADIUS + 15; // Offset below the hit circles
-
+    const forceBarYOffset = RHYTHM_KEYS_TARGET_BASE_RADIUS + 15; // Adjusted to use new constant
     for (let i = 0; i < RHYTHM_KEYS_NUM_LANES; i++) {
         const laneCenterX = startX + i * RHYTHM_KEYS_LANE_WIDTH + RHYTHM_KEYS_LANE_WIDTH / 2;
-        const forceValue = currentRhythmKeyForces[i] || 0; // Default to 0 if undefined
+        const forceValue = currentRhythmKeyForces[i] || 0;
         const barHeight = forceValue * forceBarMaxHeight;
         const barX = laneCenterX - forceBarWidth / 2;
         const barY = RHYTHM_KEYS_HIT_ZONE_Y + forceBarYOffset;
 
-        // Draw background for the bar (empty state)
         rhythmKeysCtx.fillStyle = 'rgba(255, 255, 255, 0.1)';
         rhythmKeysCtx.fillRect(barX, barY, forceBarWidth, forceBarMaxHeight);
-
-        // Draw the actual force level
-        rhythmKeysCtx.fillStyle = RHYTHM_KEYS_LANE_COLORS[i]; // Use lane color for the bar
+        rhythmKeysCtx.fillStyle = RHYTHM_KEYS_LANE_COLORS[i];
         rhythmKeysCtx.fillRect(barX, barY + (forceBarMaxHeight - barHeight), forceBarWidth, barHeight);
-        
-        // Optional: Add a border to the force bar
         rhythmKeysCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
         rhythmKeysCtx.lineWidth = 1;
         rhythmKeysCtx.strokeRect(barX, barY, forceBarWidth, forceBarMaxHeight);
     }
+    */
 
-    // 3. Draw Active Notes (Circles as "Gems")
+    // Draw Active Notes (Gems) (unchanged)
     for (const note of rhythmKeysActiveNotes) {
         const laneCenterX = startX + note.lane * RHYTHM_KEYS_LANE_WIDTH + RHYTHM_KEYS_LANE_WIDTH / 2;
-        
-        // Pulse effect for notes
         const pulseFactor = 1 + Math.sin(rhythmKeysGlobalTime * 0.1 + note.y * 0.05) * RHYTHM_KEYS_NOTE_PULSE_SCALE;
-        const currentNoteRadius = RHYTHM_KEYS_NOTE_RADIUS * pulseFactor;
+        const currentNoteDisplayRadius = RHYTHM_KEYS_NOTE_RADIUS * note.sizeFactor * pulseFactor;
 
         rhythmKeysCtx.beginPath();
-        rhythmKeysCtx.arc(laneCenterX, note.y, currentNoteRadius, 0, Math.PI * 2);
-
-        // Create a radial gradient for a gem/glossy effect
+        rhythmKeysCtx.arc(laneCenterX, note.y, currentNoteDisplayRadius, 0, Math.PI * 2);
         const gradient = rhythmKeysCtx.createRadialGradient(
-            laneCenterX - currentNoteRadius * 0.3, // Light source offset to top-left
-            note.y - currentNoteRadius * 0.3,
-            currentNoteRadius * 0.1, // Inner circle radius (highlight)
-            laneCenterX, 
-            note.y, 
-            currentNoteRadius // Outer circle radius
+            laneCenterX - currentNoteDisplayRadius * 0.3, note.y - currentNoteDisplayRadius * 0.3,
+            currentNoteDisplayRadius * 0.1, laneCenterX, note.y, currentNoteDisplayRadius
         );
-        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); // Bright highlight
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
         gradient.addColorStop(0.7, RHYTHM_KEYS_NOTE_COLORS[note.lane]);
-        gradient.addColorStop(1, RHYTHM_KEYS_LANE_COLORS[note.lane]); // Darker edge from lane color
-
+        gradient.addColorStop(1, RHYTHM_KEYS_LANE_COLORS[note.lane]);
         rhythmKeysCtx.fillStyle = gradient;
-        
-        if (note.missed) {
-            rhythmKeysCtx.globalAlpha = note.alpha; // Apply fade for missed notes
-        }
-
+        if (note.missed) rhythmKeysCtx.globalAlpha = note.alpha;
         rhythmKeysCtx.fill();
-        rhythmKeysCtx.globalAlpha = 1.0; // Reset alpha for other elements
-
+        rhythmKeysCtx.globalAlpha = 1.0;
         rhythmKeysCtx.strokeStyle = RHYTHM_KEYS_LANE_COLORS[note.lane]; 
-        rhythmKeysCtx.lineWidth = 2; // Reduced border width for gem look
+        rhythmKeysCtx.lineWidth = 2;
         rhythmKeysCtx.stroke();
     }
 
-    drawParticles(); // Draw active particles
-
-    // 4. Draw Score (already handled by HTML, but could draw on canvas too)
-    // rhythmKeysCtx.fillStyle = RHYTHM_KEYS_TEXT_COLOR;
-    // rhythmKeysCtx.font = "24px Arial";
-    // rhythmKeysCtx.textAlign = "left";
-    // rhythmKeysCtx.fillText("Score: " + rhythmKeysScore, 20, 30);
+    drawParticles();
 }
 
-// NEW function to be called by game_control.js
 window.rhythmGameProcessInputs = function(forcesArray, threshold) {
+    // ... (logic remains the same)
     if (isRhythmKeysGameActive) {
         const currentTime = Date.now() - rhythmKeysSongStartTime;
         if (Array.isArray(forcesArray)) {
@@ -476,98 +363,77 @@ window.rhythmGameProcessInputs = function(forcesArray, threshold) {
             });
         }
     }
-    if (!isRhythmKeysGameActive || !Array.isArray(forcesArray)) { // Simpler check, length check below
-        // If game not active or forcesArray is malformed, ensure all lanes are inactive
+
+    if (!isRhythmKeysGameActive || !Array.isArray(forcesArray)) {
         for (let i = 0; i < RHYTHM_KEYS_NUM_LANES; i++) {
             rhythmKeysLaneActive[i] = false;
         }
-        currentRhythmKeyForces = [0,0,0]; // Reset forces for visualization
+        currentRhythmKeyForces = [0,0,0];
         return;
     }
 
-    // Store forces for visualization, ensuring it's always an array of 3, padding with 0 if necessary
     currentRhythmKeyForces = [
         forcesArray[0] || 0,
         forcesArray[1] || 0,
         forcesArray[2] || 0
     ];
-    if (forcesArray.length < RHYTHM_KEYS_NUM_LANES) { // If input is shorter than expected (e.g. 1-dome)
-        // game_control.js already pads for 1-dome (0, force, 0). This is a safety net here.
-        // For visualization, we just want to ensure 'currentRhythmKeyForces' is always length 3.
-    }
+
+    const HIT_WINDOW_RADIUS = RHYTHM_KEYS_NOTE_HEIGHT / 2; 
 
     for (let i = 0; i < RHYTHM_KEYS_NUM_LANES; i++) {
-        const forceForLane = currentRhythmKeyForces[i]; // Use the potentially padded/processed force
-        const laneIsNowActive = forceForLane >= threshold;
+        const forceForLane = currentRhythmKeyForces[i];
+        // Check if force meets the *base* threshold for activating the lane visually
+        const laneIsVisuallyActive = forceForLane >= threshold; 
+        rhythmKeysLaneActive[i] = laneIsVisuallyActive;
 
-        // Update visual state of the lane
-        rhythmKeysLaneActive[i] = laneIsNowActive;
-
-        if (laneIsNowActive) {
-            // Check for a hit only if the lane is currently active due to force
-            // Iterate backwards because we might splice
+        if (laneIsVisuallyActive) { // Only attempt hits if lane visually active 
             for (let noteIdx = rhythmKeysActiveNotes.length - 1; noteIdx >= 0; noteIdx--) {
                 const note = rhythmKeysActiveNotes[noteIdx];
-                if (note.lane === i) { // Check if the note is in the current lane
-                    // Check if note is within the hit zone tolerance
-                    const noteBottom = note.y + RHYTHM_KEYS_NOTE_HEIGHT; // Using constant note height
-                    const hitZoneTop = RHYTHM_KEYS_HIT_ZONE_Y - RHYTHM_KEYS_NOTE_HEIGHT; // Generous top tolerance
-                    const hitZoneBottom = RHYTHM_KEYS_HIT_ZONE_Y + RHYTHM_KEYS_NOTE_HEIGHT / 2; // Bottom tolerance
-
-                    if (noteBottom >= hitZoneTop && note.y <= hitZoneBottom) {
-                        console.log("Rhythm Keys: Hit in lane " + i + " by force!");
-                        rhythmKeysScore.hits++; // MODIFIED: Increment hits
-                        if (rhythmKeysScoreElement) rhythmKeysScoreElement.textContent = `Hits: ${rhythmKeysScore.hits} / Spawned: ${rhythmKeysScore.spawned}`; // MODIFIED
-                        rhythmKeysActiveNotes.splice(noteIdx, 1); // Remove hit note
-
-                        // playNoteSound(i); // TODO: Uncomment this when we have a good sound for it, now it's not sounding right
-                        showHitEffect(i); // This might need adjustment: differentiate sustained hold vs. successful hit
-                        // For now, any force above threshold that overlaps a note is a hit.
-                        // More advanced logic could check for the *rising edge* of the force or a peak.
-                        break; // Process only one note per lane per frame if multiple overlap (unlikely with good chart)
+                if (note.lane === i && !note.missed) {
+                    if (Math.abs(note.y - RHYTHM_KEYS_HIT_ZONE_Y) <= HIT_WINDOW_RADIUS) {
+                        const requiredForceForThisNote = threshold * note.sizeFactor;
+                        if (forceForLane >= requiredForceForThisNote) {
+                            // console.log(`Rhythm Keys: Hit in lane ${i} (size ${note.sizeFactor.toFixed(2)}, force ${forceForLane.toFixed(2)} >= ${requiredForceForThisNote.toFixed(2)})`);
+                            rhythmKeysScore.hits++;
+                            if (rhythmKeysScoreElement) rhythmKeysScoreElement.textContent = `Hits: ${rhythmKeysScore.hits} / Spawned: ${rhythmKeysScore.spawned}`;
+                            rhythmKeysActiveNotes.splice(noteIdx, 1);
+                            // playNoteSound(i); Piano sound is not appropiate
+                            showHitEffect(i);
+                            break; 
+                        }
                     }
                 }
             }
-        } 
-        // If !laneIsNowActive, rhythmKeysLaneActive[i] is already false from above,
-        // so the visual representation will be inactive.
+        }
     }
 };
 
 function playNoteSound(laneIndex) {
-    if (!audioContext || laneIndex < 0 || laneIndex >= noteHitSamples.length) {
-        return;
-    }
-
+    // ... (remains the same)
+    if (!audioContext || laneIndex < 0 || laneIndex >= noteHitSamples.length) return;
     const sourceBuffer = noteHitSamples[laneIndex];
     if (!sourceBuffer) {
-        // console.warn(`Note sample for lane ${laneIndex} not loaded.`);
-        // Fallback to oscillator if sample not loaded (optional)
         playOscillatorFallback(laneIndex);
         return;
     }
-
     const source = audioContext.createBufferSource();
     source.buffer = sourceBuffer;
-    
     const gainNode = audioContext.createGain();
     gainNode.gain.setValueAtTime(NOTE_HIT_VOLUME, audioContext.currentTime);
-
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(audioContext.currentTime);
-    console.log("Rhythm Keys: Playing sample for lane " + laneIndex);
 }
 
-// Optional: Fallback oscillator sound if samples fail to load
 function playOscillatorFallback(laneIndex) {
+    // ... (remains the same)
     if (!audioContext) return;
     const fallbackFrequencies = [261.63, 329.63, 392.00];
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
-    oscillator.type = 'sine'; // Softer sound
+    oscillator.type = 'sine';
     oscillator.frequency.setValueAtTime(fallbackFrequencies[laneIndex], audioContext.currentTime);
     gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.25);
@@ -577,195 +443,96 @@ function playOscillatorFallback(laneIndex) {
 }
 
 function showHitEffect(laneIndex) {
-    // Placeholder for visual effect on hit
-    console.log("Rhythm Keys: Placeholder - Show hit effect for lane " + laneIndex);
-    // This effect is now primarily handled by rhythmKeysLaneActive state in drawRhythmKeysGame
-    // We can add a more explosive/temporary particle effect here specifically for successful hits.
-
+    // ... (remains the same, flash effect adjusted slightly)
     if (rhythmKeysCtx) {
         const totalLanesWidth = RHYTHM_KEYS_NUM_LANES * RHYTHM_KEYS_LANE_WIDTH;
         const startX = (rhythmKeysCanvas.width - totalLanesWidth) / 2;
         const laneCenterX = startX + laneIndex * RHYTHM_KEYS_LANE_WIDTH + RHYTHM_KEYS_LANE_WIDTH / 2;
-
-        // Example: Simple particle burst for successful hit - Placeholder for now
-        // Will implement actual particles in a subsequent step.
-        console.log("Rhythm Keys: Spawn particles for successful hit in lane " + laneIndex);
-
-        // Spawn particles for successful hit
         createParticles(laneCenterX, RHYTHM_KEYS_HIT_ZONE_Y, RHYTHM_KEYS_LANE_COLORS[laneIndex]);
 
-        // Enhanced Hit Flash for SUCCESSFUL hits (distinct from key-down feedback)
-        rhythmKeysCtx.fillStyle = 'rgba(255, 255, 224, 0.85)'; // Light yellow, very bright flash
+        rhythmKeysCtx.fillStyle = 'rgba(255, 255, 224, 0.75)';
         rhythmKeysCtx.beginPath();
-        const flashBaseRadius = RHYTHM_KEYS_HIT_TARGET_RADIUS * 1.5; // Larger base for hit flash
-        // A quick, sharp pulse for the flash itself
-        const flashVisualPulse = Math.sin(rhythmKeysGlobalTime * 0.5) * 8 + 5; // Fast, larger amplitude pulse
-        rhythmKeysCtx.arc(laneCenterX, RHYTHM_KEYS_HIT_ZONE_Y, flashBaseRadius + flashVisualPulse, 0, Math.PI * 2); 
+        // Flash radius based on the TARGET_BASE_RADIUS for consistency
+        rhythmKeysCtx.arc(laneCenterX, RHYTHM_KEYS_HIT_ZONE_Y, RHYTHM_KEYS_TARGET_BASE_RADIUS * 1.6, 0, Math.PI * 2);
         rhythmKeysCtx.fill();
-
-        // The successful hit flash is still frame-dependent. 
-        // For a longer visible flash, manage its state over multiple frames.
     }
 }
 
-// Helper function to draw rounded rectangles (add if not already present)
-function drawRoundedRect(ctx, x, y, width, height, radius) {
-    if (typeof radius === 'undefined') {
-        radius = 5;
-    }
-    if (typeof radius === 'number') {
-        radius = {tl: radius, tr: radius, br: radius, bl: radius};
-    } else {
-        var defaultRadius = {tl: 0, tr: 0, br: 0, bl: 0};
-        for (var side in defaultRadius) {
-            radius[side] = radius[side] || defaultRadius[side];
-        }
-    }
-    ctx.beginPath();
-    ctx.moveTo(x + radius.tl, y);
-    ctx.lineTo(x + width - radius.tr, y);
-    ctx.arcTo(x + width, y, x + width, y + radius.tr, radius.tr);
-    ctx.lineTo(x + width, y + height - radius.br);
-    ctx.arcTo(x + width, y + height, x + width - radius.br, y + height, radius.br);
-    ctx.lineTo(x + radius.bl, y + height);
-    ctx.arcTo(x, y + height, x, y + height - radius.bl, radius.bl);
-    ctx.lineTo(x, y + radius.tl);
-    ctx.arcTo(x, y, x + radius.tl, y, radius.tl);
-    ctx.closePath();
-    // Fill and stroke will be done by the caller
+// ... (drawRoundedRect, drawDynamicBackground, createParticles, updateParticles, drawParticles, loadBackgroundMusic, loadNoteHitSamples remain the same) ...
+function drawRoundedRect(ctx, x, y, width, height, radius) { 
+    if (typeof radius === 'undefined') { radius = 5;}
+    if (typeof radius === 'number') { radius = {tl: radius, tr: radius, br: radius, bl: radius};} 
+    else { var defaultRadius = {tl: 0, tr: 0, br: 0, bl: 0}; for (var side in defaultRadius) { radius[side] = radius[side] || defaultRadius[side];}}
+    ctx.beginPath(); ctx.moveTo(x + radius.tl, y); ctx.lineTo(x + width - radius.tr, y);
+    ctx.arcTo(x + width, y, x + width, y + radius.tr, radius.tr); ctx.lineTo(x + width, y + height - radius.br);
+    ctx.arcTo(x + width, y + height, x + width - radius.br, y + height, radius.br); ctx.lineTo(x + radius.bl, y + height);
+    ctx.arcTo(x, y + height, x, y + height - radius.bl, radius.bl); ctx.lineTo(x, y + radius.tl);
+    ctx.arcTo(x, y, x + radius.tl, y, radius.tl); ctx.closePath();
 }
-
-// --- New Function for Dynamic Background ---
-function drawDynamicBackground() {
+function drawDynamicBackground() { 
     if (!rhythmKeysCtx || !rhythmKeysCanvas) return;
-
-    // Simple gradient background for now
     const bgGradient = rhythmKeysCtx.createLinearGradient(0, 0, 0, rhythmKeysCanvas.height);
-    bgGradient.addColorStop(0, '#1c1c2e'); // Dark blue/purple top
-    bgGradient.addColorStop(1, '#3a3a52'); // Lighter slate blue bottom
-    rhythmKeysCtx.fillStyle = bgGradient;
-    rhythmKeysCtx.fillRect(0, 0, rhythmKeysCanvas.width, rhythmKeysCanvas.height);
-
-    // Optional: Add subtle stars or patterns here later
-    // Example: Draw a few static stars for now
+    bgGradient.addColorStop(0, '#1c1c2e'); bgGradient.addColorStop(1, '#3a3a52'); 
+    rhythmKeysCtx.fillStyle = bgGradient; rhythmKeysCtx.fillRect(0, 0, rhythmKeysCanvas.width, rhythmKeysCanvas.height);
     rhythmKeysCtx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-    for (let i = 0; i < 30; i++) { // Draw 30 stars
-        const x = Math.random() * rhythmKeysCanvas.width;
-        const y = Math.random() * rhythmKeysCanvas.height * 0.7; // Only in the upper 70%
+    for (let i = 0; i < 30; i++) {
+        const x = Math.random() * rhythmKeysCanvas.width; const y = Math.random() * rhythmKeysCanvas.height * 0.7; 
         const r = Math.random() * 1.5;
-        rhythmKeysCtx.beginPath();
-        rhythmKeysCtx.arc(x, y, r, 0, Math.PI * 2);
-        rhythmKeysCtx.fill();
+        rhythmKeysCtx.beginPath(); rhythmKeysCtx.arc(x, y, r, 0, Math.PI * 2); rhythmKeysCtx.fill();
     }
 }
-
-// --- Particle System Functions ---
-function createParticles(x, y, color) {
+function createParticles(x, y, color) { 
     for (let i = 0; i < RHYTHM_KEYS_PARTICLE_COUNT; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * RHYTHM_KEYS_PARTICLE_SPEED_MAX;
-        rhythmKeysParticles.push({
-            x: x,
-            y: y,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-            size: Math.random() * 3 + 2, // Particle size between 2 and 5
-            color: color,
-            life: RHYTHM_KEYS_PARTICLE_LIFESPAN,
-            alpha: 1.0
+        const angle = Math.random() * Math.PI * 2; const speed = Math.random() * RHYTHM_KEYS_PARTICLE_SPEED_MAX;
+        rhythmKeysParticles.push({ x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+            size: Math.random() * 3 + 2, color: color, life: RHYTHM_KEYS_PARTICLE_LIFESPAN, alpha: 1.0
         });
     }
 }
-
-function updateParticles() {
+function updateParticles() { 
     for (let i = rhythmKeysParticles.length - 1; i >= 0; i--) {
-        const p = rhythmKeysParticles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.05; // Simple gravity
-        p.life--;
-        p.alpha = Math.max(0, p.life / RHYTHM_KEYS_PARTICLE_LIFESPAN); // Fade out based on life
-
-        if (p.life <= 0) {
-            rhythmKeysParticles.splice(i, 1);
-        }
+        const p = rhythmKeysParticles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.05; 
+        p.life--; p.alpha = Math.max(0, p.life / RHYTHM_KEYS_PARTICLE_LIFESPAN);
+        if (p.life <= 0) rhythmKeysParticles.splice(i, 1);
     }
 }
-
-function drawParticles() {
+function drawParticles() { 
     if (!rhythmKeysCtx) return;
     for (const p of rhythmKeysParticles) {
-        rhythmKeysCtx.globalAlpha = p.alpha;
-        rhythmKeysCtx.fillStyle = p.color;
-        rhythmKeysCtx.beginPath();
-        rhythmKeysCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        rhythmKeysCtx.fill();
+        rhythmKeysCtx.globalAlpha = p.alpha; rhythmKeysCtx.fillStyle = p.color;
+        rhythmKeysCtx.beginPath(); rhythmKeysCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2); rhythmKeysCtx.fill();
     }
-    rhythmKeysCtx.globalAlpha = 1.0; // Reset global alpha
+    rhythmKeysCtx.globalAlpha = 1.0;
 }
-
-// --- Audio Loading Functions ---
-function loadBackgroundMusic() {
-    backgroundMusic = new Audio(BACKGROUND_MUSIC_PATH);
-    backgroundMusic.loop = true;
-    backgroundMusic.volume = BACKGROUND_MUSIC_VOLUME;
+function loadBackgroundMusic() { 
+    backgroundMusic = new Audio(BACKGROUND_MUSIC_PATH); backgroundMusic.loop = true; backgroundMusic.volume = BACKGROUND_MUSIC_VOLUME;
     backgroundMusic.addEventListener('canplaythrough', () => {
         console.log("Background music loaded and can play through.");
-        // If game is already active, try playing it now
         if (isRhythmKeysGameActive && backgroundMusic.paused) {
             backgroundMusic.play().catch(e => console.error("Error playing background music post-load:", e));
         }
     });
-    backgroundMusic.addEventListener('error', (e) => {
-        console.error("Error loading background music:", e);
-    });
-    backgroundMusic.load(); // Start loading
+    backgroundMusic.addEventListener('error', (e) => console.error("Error loading background music:", e));
+    backgroundMusic.load();
 }
-
-function loadNoteHitSamples() {
+function loadNoteHitSamples() { 
     if (!audioContext) {
-        // Try to initialize AudioContext if it wasn't (e.g. if initRhythmKeys is called before game start)
-        // However, this might fail without user gesture. Best to ensure AC is up by game start.
-        try {
-            if (!(window.AudioContext || window.webkitAudioContext)) {
-                console.warn("Web Audio API not supported, cannot load note samples.");
-                return;
-            }
+        try { if (!(window.AudioContext || window.webkitAudioContext)) { console.warn("Web Audio API not supported, cannot load note samples."); return; }
             if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        } catch (e) {
-            console.error("AudioContext could not be initialized for loading samples.", e);
-            return;
-        }
+        } catch (e) { console.error("AudioContext could not be initialized for loading samples.", e); return; }
     }
-    if (!audioContext) { // Double check after attempt
-        console.warn("AudioContext still not available after trying to init. Cannot load samples.");
-        return;
-    }
-
+    if (!audioContext) { console.warn("AudioContext still not available after trying to init. Cannot load samples."); return; }
     noteHitSamplePaths.forEach((path, index) => {
-        fetch(path)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status} for ${path}`);
-                }
-                return response.arrayBuffer();
-            })
+        fetch(path).then(response => { if (!response.ok) throw new Error(`HTTP error! status: ${response.status} for ${path}`); return response.arrayBuffer(); })
             .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
-            .then(audioBuffer => {
-                noteHitSamples[index] = audioBuffer;
-                console.log(`Loaded note sample for lane ${index}: ${path}`);
-            })
-            .catch(error => {
-                console.error(`Error loading note sample ${path}:`, error);
-                noteHitSamples[index] = null; // Ensure it's null on error
-            });
+            .then(audioBuffer => { noteHitSamples[index] = audioBuffer; /*console.log(`Loaded note sample for lane ${index}: ${path}`);*/ })
+            .catch(error => { console.error(`Error loading note sample ${path}:`, error); noteHitSamples[index] = null; });
     });
 }
 
-// Expose functions to global scope if they need to be called from HTML/main script
+
 window.startRhythmKeysGame = startRhythmKeysGame;
 window.stopRhythmKeysGame = stopRhythmKeysGame;
 window.initRhythmKeys = initRhythmKeys;
 
-// Call init once the script is loaded, or ensure it's called before first game start
-document.addEventListener('DOMContentLoaded', initRhythmKeys); 
+document.addEventListener('DOMContentLoaded', initRhythmKeys);
