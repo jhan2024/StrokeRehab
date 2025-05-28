@@ -15,19 +15,7 @@
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- forceChart in analyze tab -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
-    <style>
-        #forceChartWrapper canvas {
-          max-height: 300px;
-          display: block;
-          margin: auto;
-        }
-      
-        #forceChartWrapper {
-          max-width: 900px;
-          margin: 40px auto;
-        }
-      </style>      
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>      
 </head>
 
 <body>
@@ -261,7 +249,7 @@
                 <!-- Upload section -->
                 
                 <div class="analysis-controls">
-                    <input type="file" id="analysisFileInput" accept=".json" />
+                    <!-- <input type="file" id="analysisFileInput" accept=".json" /> -->
                     <button id="analyzeBtn" class="analyze-btn">Start Analysis</button>
                     <span id="analysisSourceHint" style="margin-left: 10px; font-style: italic; color: gray;"></span>
                 </div>
@@ -289,16 +277,16 @@
                         <h3 style="text-align:center">📈 Full Dome Press Traces</h3>
 
                         <div style="margin-bottom: 20px;">
-                            <h4>Dome 0</h4>
-                            <canvas id="forceChart0" width="800" height="200"></canvas>
+                            <h4>Thumb</h4>
+                            <canvas id="forceChart0" width="800" height="180"></canvas>
                         </div>
                         <div style="margin-bottom: 20px;">
-                            <h4>Dome 1</h4>
-                            <canvas id="forceChart1" width="800" height="200"></canvas>
+                            <h4>Index</h4>
+                            <canvas id="forceChart1" width="800" height="180"></canvas>
                         </div>
                         <div style="margin-bottom: 20px;">
-                            <h4>Dome 2</h4>
-                            <canvas id="forceChart2" width="800" height="200"></canvas>
+                            <h4>Middle</h4>
+                            <canvas id="forceChart2" width="800" height="180"></canvas>
                         </div>
                     </div>
                 </div>    

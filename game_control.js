@@ -219,22 +219,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.analysisGameData = exportData;
                 console.log("Saved game data to analysisGameData for later use.");
 
-                let fileName = prompt("Please enter the save file name (without json)", `rhythmkeys_trace_${Date.now()}`);
-                if (!fileName) {
-                    alert("no filename, save file cancelled");
-                    return;
-                }
-                if (!fileName.endsWith(".json")) {
-                    fileName += ".json";
-                }
-                window.analysisGameDataFileName = fileName;
-                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = fileName;
-                link.click();
-                URL.revokeObjectURL(url);
+                /* Rename and download file */
+                // let fileName = prompt("Please enter the save file name (without json)", `rhythmkeys_trace_${Date.now()}`);
+                // if (!fileName) {
+                //     alert("no filename, save file cancelled");
+                //     return;
+                // }
+                // if (!fileName.endsWith(".json")) {
+                //     fileName += ".json";
+                // }
+                // window.analysisGameDataFileName = fileName;
+                // const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                // const url = URL.createObjectURL(blob);
+                // const link = document.createElement('a');
+                // link.href = url;
+                // link.download = fileName;
+                // link.click();
+                // URL.revokeObjectURL(url);
             } else {
                 console.error("stopRhythmKeysGame function not found!");
             }

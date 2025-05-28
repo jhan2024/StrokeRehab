@@ -259,34 +259,35 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Analysis logic
     document.getElementById("analyzeBtn").addEventListener("click", () => {
-        const fileInput = document.getElementById("analysisFileInput");
-        const uploadedFile = fileInput.files[0];
-        const hint = document.getElementById("analysisSourceHint");
+        // const fileInput = document.getElementById("analysisFileInput");
+        // const uploadedFile = fileInput.files[0];
+        // const hint = document.getElementById("analysisSourceHint");
         // Handle payload: from uploaded file OR saved game data
-        if (uploadedFile) {
-            hint.textContent = "";
-            // If user uploaded a file, read it
-            const reader = new FileReader();
-            reader.onload = () => {
-                const content = reader.result;
-                console.log("File content:", content);
+        // if (uploadedFile) {
+        //     hint.textContent = "";
+        //     // If user uploaded a file, read it
+        //     const reader = new FileReader();
+        //     reader.onload = () => {
+        //         const content = reader.result;
+        //         console.log("File content:", content);
 
-                // Check whether it's valid JSON
-                let payload;
-                try {
-                    payload = JSON.parse(content);
-                } catch (e) {
-                    alert("The uploaded file is not a valid JSON!");
-                    return;
-                }
+        //         // Check whether it's valid JSON
+        //         let payload;
+        //         try {
+        //             payload = JSON.parse(content);
+        //         } catch (e) {
+        //             alert("The uploaded file is not a valid JSON!");
+        //             return;
+        //         }
 
-                sendAnalysisRequest(payload);
-            };
-            reader.readAsText(uploadedFile); // Read as plain text
-        } else if (window.analysisGameData) {
+        //         sendAnalysisRequest(payload);
+        //     };
+        //     reader.readAsText(uploadedFile); // Read as plain text
+        // } 
+        if (window.analysisGameData) {
             // No file uploaded, but game data available
-            const filename = window.analysisGameDataFileName || "RhythmKeysGameData";
-            hint.textContent = `🎮 Auto: ${filename}`;
+            // const filename = window.analysisGameDataFileName || "RhythmKeysGameData";
+            // hint.textContent = `🎮 Auto: ${filename}`;
 
             console.log("Using in-memory game data for analysis");
             sendAnalysisRequest(window.analysisGameData);
@@ -400,16 +401,18 @@ function plotForceChart(forceTrace, expectedNotes) {
                 datasets: [{
                     // label: `Dome ${lane}`,
                     data: pressures,
-                    borderColor: ['red', 'green', 'blue'][lane],
+                    borderColor: ['#27ae60', '#e74c3c', '#3498db'][lane],
                     fill: false,
-                    pointRadius: 0
+                    pointRadius: 0,
+                    tension: 1.0
                 }]
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false,
+                maintainAspectRatio: true,
                 scales: {
-                    x: { type: 'linear', title: { display: true, text: 'Time (ms)' } },
+                    x: { type: 'linear', title: { display: true, text: 'Time (s)' }, 
+                         ticks: {callback: function(value) {return (value / 1000).toFixed(0);}}},
                     y: { min: 0, max: 1, title: { display: true, text: 'Pressure' } }
                 },
                 plugins: {
