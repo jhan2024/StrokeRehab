@@ -68,7 +68,7 @@ def generate_prompt(result):
             for tag, count in tags.items():
                 prompt += f"- {count} {tag.replace('_', ' ')}\n"
     
-    prompt += "\n\nPlease give short, encouraging feedback on how to improve, based on the data. Mention specific finger issues if applicable"
+    prompt += "\n\nPlease give short, concise, encouraging feedback on how to improve, based on the data. Mention specific finger issues if applicable"
     return prompt
 
 @app.route("/feedback", methods=["POST"])

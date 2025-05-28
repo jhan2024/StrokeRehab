@@ -737,11 +737,11 @@ body {
     padding: 20px;
     border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    min-width: 300px;
+    min-width: 200px;
 }
 
 .panel-right {
-    flex: 2;
+    flex: 3;
     background-color: white;
     padding: 20px;
     border-radius: 12px;

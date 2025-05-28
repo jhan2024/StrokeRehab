@@ -259,6 +259,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Analysis logic
     document.getElementById("analyzeBtn").addEventListener("click", () => {
+        // Reset feedback area immediately
+        document.getElementById("feedbackResult").innerHTML = `Waiting for AI feedback...
+        `;
         // const fileInput = document.getElementById("analysisFileInput");
         // const uploadedFile = fileInput.files[0];
         // const hint = document.getElementById("analysisSourceHint");
@@ -292,7 +295,7 @@ document.addEventListener('DOMContentLoaded', function () {
             console.log("Using in-memory game data for analysis");
             sendAnalysisRequest(window.analysisGameData);
         } else {
-            alert("Please upload a file or finish a rhythm game first.");
+            alert("Please finish a rhythm game first.");
         }
     });
 
