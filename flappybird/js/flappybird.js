@@ -33,8 +33,8 @@ var gameSettings = {
    
    // Game difficulty settings
    pipeHeight: 160,         // Increased from 90/200 (This now represents the *gap* if two pipes were present)
-   pipeInterval: 2100,      // Increased from 1400
-   gameSpeed: 40,           // Frames per second (reduced from 60)
+   pipeInterval: 2500,      // Increased from 2100 to 3000 for slower pipes
+   gameSpeed: 30,           // Reduced from 40 to 30 for slower overall speed
    controlMode: 'jump',     // 'jump' or 'gravity'
    forceInfluenceFactor: -0.3, // How much normalized force counters gravity (negative value)
    
@@ -168,10 +168,10 @@ function createSettingsPanel() {
    customSettings.append(createSlider('pipeHeight', 'Pipe Gap Size', gameSettings.pipeHeight, 80, 220, 10));
    
    // Pipe interval slider
-   customSettings.append(createSlider('pipeInterval', 'Pipe Interval', gameSettings.pipeInterval, 1000, 3000, 100));
+   customSettings.append(createSlider('pipeInterval', 'Pipe Interval', gameSettings.pipeInterval, 1000, 5000, 100));
    
    // Game speed slider
-   customSettings.append(createSlider('gameSpeed', 'Game Speed', gameSettings.gameSpeed, 20, 60, 5));
+   customSettings.append(createSlider('gameSpeed', 'Game Speed', gameSettings.gameSpeed, 10, 100, 5));
    
    settingsPanel.append(customSettings);
    

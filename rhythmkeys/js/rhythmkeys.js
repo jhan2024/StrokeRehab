@@ -8,6 +8,19 @@ let isRhythmKeysGameActive = false;
 let rhythmKeysAnimationId = null;
 let rhythmKeysForceTrace = [];
 
+// --- ADDED: Encouraging Notifications System ---
+let rhythmKeysNotifications = [];
+let rhythmKeysComboCount = 0;
+let rhythmKeysLastHitTime = 0;
+const RHYTHM_KEYS_COMBO_TIMEOUT = 2000; // Reset combo after 2 seconds of no hits
+
+const RHYTHM_KEYS_ENCOURAGING_MESSAGES = [
+    "Great Hit!", "Strong Press!", "Good Job!", "Keep Going!"
+];
+
+const RHYTHM_KEYS_COMBO_MESSAGES = [
+    "Combo x2!", "Combo x3!", "Keep Going!", "Good Rhythm!", "Well Done!"
+];
 
 const RHYTHM_KEYS_NUM_LANES = 3;
 const RHYTHM_KEYS_LANE_WIDTH = 100; // Pixel width of each lane
@@ -117,6 +130,11 @@ function startRhythmKeysGame() {
     isRhythmKeysGameActive = true;
     rhythmKeysScore = { hits: 0, spawned: 0 };
 
+    // --- ADDED: Reset notification system ---
+    rhythmKeysNotifications = [];
+    rhythmKeysComboCount = 0;
+    rhythmKeysLastHitTime = 0;
+
     if (!audioContext) {
         try {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -220,6 +238,9 @@ function updateRhythmKeysLogic() {
         }
     }
     updateParticles();
+    
+    // --- ADDED: Update notifications ---
+    updateNotifications();
 }
 
 function drawRhythmKeysGame() {
@@ -350,6 +371,9 @@ function drawRhythmKeysGame() {
     }
 
     drawParticles();
+    
+    // --- ADDED: Draw encouraging notifications on top ---
+    drawNotifications();
 }
 
 window.rhythmGameProcessInputs = function(forcesArray, threshold) {
@@ -396,6 +420,10 @@ window.rhythmGameProcessInputs = function(forcesArray, threshold) {
                             // console.log(`Rhythm Keys: Hit in lane ${i} (size ${note.sizeFactor.toFixed(2)}, force ${forceForLane.toFixed(2)} >= ${requiredForceForThisNote.toFixed(2)})`);
                             rhythmKeysScore.hits++;
                             if (rhythmKeysScoreElement) rhythmKeysScoreElement.textContent = `Hits: ${rhythmKeysScore.hits} / Spawned: ${rhythmKeysScore.spawned}`;
+                            
+                            // --- ADDED: Create encouraging notification ---
+                            createEncouragingNotification(0, 0, forceForLane); // Position parameters no longer used
+                            
                             rhythmKeysActiveNotes.splice(noteIdx, 1);
                             // playNoteSound(i); Piano sound is not appropiate
                             showHitEffect(i);
@@ -530,6 +558,148 @@ function loadNoteHitSamples() {
     });
 }
 
+// --- ADDED: Notification Functions ---
+function createEncouragingNotification(x, y, forceValue) {
+    const currentTime = Date.now();
+    
+    // Update combo tracking
+    if (currentTime - rhythmKeysLastHitTime < RHYTHM_KEYS_COMBO_TIMEOUT) {
+        rhythmKeysComboCount++;
+    } else {
+        rhythmKeysComboCount = 1;
+    }
+    rhythmKeysLastHitTime = currentTime;
+    
+    // --- MODIFIED: Only show notifications for special conditions ---
+    let shouldShowNotification = false;
+    let message;
+    let color = '#FFD700'; // Gold color
+    let scale = 1.0;
+    
+    if (rhythmKeysComboCount >= 3) {
+        // Show notification for combos of 3 or more
+        shouldShowNotification = true;
+        const comboIndex = Math.min(rhythmKeysComboCount - 3, RHYTHM_KEYS_COMBO_MESSAGES.length - 1);
+        message = RHYTHM_KEYS_COMBO_MESSAGES[comboIndex];
+        color = '#FF4500'; // Orange-red for combos
+        scale = 1.05; // Slightly larger for combos
+    } else if (forceValue && forceValue > 0.8) {
+        // Show notification for strong presses
+        shouldShowNotification = true;
+        message = "Strong Press!";
+        color = '#00FF00'; // Green for strong presses
+        scale = 1.03;
+    } else if (rhythmKeysScore.hits % 5 === 0 && rhythmKeysScore.hits > 0) {
+        // Show encouraging message every 5th hit
+        shouldShowNotification = true;
+        message = RHYTHM_KEYS_ENCOURAGING_MESSAGES[Math.floor(Math.random() * RHYTHM_KEYS_ENCOURAGING_MESSAGES.length)];
+        scale = 1.02;
+    }
+    
+    // Only create notification if conditions are met
+    if (!shouldShowNotification) return;
+    
+    // --- MODIFIED: Position at top center of canvas ---
+    const notification = {
+        x: rhythmKeysCanvas.width / 2, // Center horizontally
+        y: 80, // Fixed position near top
+        message: message,
+        color: color,
+        alpha: 1.0,
+        scale: scale,
+        velocity: 0, // No movement, just fade
+        life: 90, // Shorter lifespan (1.5 seconds)
+        maxLife: 90
+    };
+    
+    rhythmKeysNotifications.push(notification);
+}
+
+function updateNotifications() {
+    for (let i = rhythmKeysNotifications.length - 1; i >= 0; i--) {
+        const notification = rhythmKeysNotifications[i];
+        
+        // --- MODIFIED: Smoother animation with easing ---
+        notification.life--;
+        
+        // Smooth fade with easing
+        const lifeRatio = notification.life / notification.maxLife;
+        
+        // Smooth fade out using cubic easing - stay visible longer, then smooth fade
+        if (lifeRatio > 0.3) {
+            notification.alpha = 1.0;
+        } else {
+            // Smooth fade in last 30% of life using sine easing
+            const fadeProgress = lifeRatio / 0.3;
+            notification.alpha = Math.sin(fadeProgress * Math.PI * 0.5); // Smooth sine fade
+        }
+        
+        // --- MODIFIED: Much smoother scale animation with sine easing ---
+        const animationProgress = 1 - lifeRatio; // 0 to 1 as animation progresses
+        
+        // Smooth scale animation: gentle grow-in, stable hover, gentle shrink
+        let targetScale;
+        if (animationProgress < 0.15) {
+            // Quick grow-in phase (first 15% of animation) with bounce
+            const growProgress = animationProgress / 0.15;
+            const easedGrow = 1 - Math.pow(1 - growProgress, 3); // Cubic ease-out for smooth entry
+            targetScale = 0.7 + (notification.scale - 0.7) * easedGrow;
+        } else if (animationProgress < 0.8) {
+            // Stable phase with very gentle breathing using sine wave
+            const breathePhase = (animationProgress - 0.15) / 0.65;
+            const breathe = Math.sin(breathePhase * Math.PI * 4) * 0.015; // Very gentle breathing
+            targetScale = notification.scale + breathe;
+        } else {
+            // Gentle shrink phase with smooth easing
+            const shrinkProgress = (animationProgress - 0.8) / 0.2;
+            const easedShrink = Math.sin(shrinkProgress * Math.PI * 0.5); // Smooth sine shrink
+            targetScale = notification.scale * (1 - easedShrink * 0.08);
+        }
+        
+        // Smooth interpolation to target scale for fluid animation
+        notification.scale += (targetScale - notification.scale) * 0.2;
+        
+        // Add subtle floating effect with slower, more graceful movement
+        const floatCycle = animationProgress * Math.PI * 1.5; // Slower cycle
+        const floatOffset = Math.sin(floatCycle) * 3; // Gentle vertical float
+        notification.y = 80 + floatOffset;
+        
+        // Remove expired notifications
+        if (notification.life <= 0) {
+            rhythmKeysNotifications.splice(i, 1);
+        }
+    }
+    
+    // Reset combo if too much time has passed since last hit
+    if (Date.now() - rhythmKeysLastHitTime > RHYTHM_KEYS_COMBO_TIMEOUT) {
+        rhythmKeysComboCount = 0;
+    }
+}
+
+function drawNotifications() {
+    if (!rhythmKeysCtx) return;
+    
+    rhythmKeysCtx.save();
+    rhythmKeysCtx.textAlign = 'center';
+    rhythmKeysCtx.textBaseline = 'middle';
+    rhythmKeysCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    rhythmKeysCtx.shadowBlur = 4;
+    rhythmKeysCtx.shadowOffsetX = 0;
+    rhythmKeysCtx.shadowOffsetY = 2;
+    
+    for (const notification of rhythmKeysNotifications) {
+        rhythmKeysCtx.globalAlpha = notification.alpha;
+        rhythmKeysCtx.fillStyle = notification.color;
+        
+        // --- MODIFIED: Smaller, more subtle font size ---
+        const fontSize = Math.round(20 * notification.scale);
+        rhythmKeysCtx.font = `bold ${fontSize}px Arial`;
+        
+        rhythmKeysCtx.fillText(notification.message, notification.x, notification.y);
+    }
+    
+    rhythmKeysCtx.restore();
+}
 
 window.startRhythmKeysGame = startRhythmKeysGame;
 window.stopRhythmKeysGame = stopRhythmKeysGame;

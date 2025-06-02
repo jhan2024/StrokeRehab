@@ -127,7 +127,7 @@
 
 /* Animations */
 .animated {
-    animation-duration: 0.7s;
+    animation-duration: 1.5s; /* Increased from 0.7s to 1.5s for slower animation */
     animation-iteration-count: infinite;
 }
 
