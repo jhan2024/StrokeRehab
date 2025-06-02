@@ -6,6 +6,8 @@ A web-based interface designed for a soft robotics-based hand rehabilitation dev
 
 This application provides a user interface for controlling and interacting with a hand rehabilitation device. It allows users to select the device type (1-Dome or 3-Dome), connect to the device (either a real Arduino or a built-in simulator), visualize force input(s), perform gamified exercises, and measure performance metrics.
 
+More details can be found in the `documentation` folder.
+
 ## Features
 
 The interface is divided into two main panels:
@@ -88,7 +90,7 @@ This panel contains the core application functionalities accessible via tabs:
     -   `EVT_PRESSURE_RANGES_CHANGED`: Dispatched by `InputModeManager` when pressure range calibration values are updated.
 -   **Force Processing**:
     1.  Raw data received:
-        *   Arduino (1-Dome): Single floating-point pressure value per line.
+        *   Arduino (1-Dome): Single floating-point pressure value per line.(TODO: change to JSON)
         *   Arduino (3-Dome): JSON string `{"timestamp": <number>, "pressure": [val1, val2, val3]}` per line.
         *   Simulator (1-Dome): JSON string `{"normalizedForces": [fN], "rawPressures": [rP]}` per line.
         *   Simulator (3-Dome): JSON string `{"timestamp": <Date.now()>, "pressure": [rawP1, rawP2, rawP3]}` per line.
@@ -109,7 +111,7 @@ This panel contains the core application functionalities accessible via tabs:
 1.  **Prerequisites**:
     *   A modern web browser. **Google Chrome** or **Microsoft Edge** is required for Arduino mode.
     *   If using Arduino mode:
-        *   1-Dome device: Program to send pressure readings (float per line) at 9600 baud.
+        *   1-Dome device: Program to send pressure readings (float per line) at 9600 baud.(TODO: change to JSON)
         *   3-Dome device: Program to send JSON strings (`{"timestamp": <number>, "pressure": [val1, val2, val3]}` per line) at 9600 baud.
 2.  **Clone the Repository**: `git clone <repository-url>`
 3.  **Open the Interface**: Open `index.html` in your browser.
@@ -156,13 +158,13 @@ This panel contains the core application functionalities accessible via tabs:
 
 ### Next Steps
 
-1.  **Hardware Control**: Refine connection and data handling with the rehabilitation device.
+1.  **Hardware Control**: Refine connection and data handling with the rehabilitation device. (Finished)
 2.  **Multi-contact support**: (Largely implemented with 3-Dome structure, further refinements possible).
 3.  **Game Development**: Adapt the placeholder games (Mini Golf, Piano Keys, etc.).
 4.  **Data Storage and management**: game sessions and patient data for training, analysis, and reporting.
-5.  **AI Therapist**: Integrate AI therapy algorithms for personalized rehabilitation.
+5.  **AI Therapist**: Integrate AI therapy algorithms for personalized rehabilitation.(partially implemented)
 6.  **Dashboard**: Design and implement an interface for therapists to manage patients and view progress.
-7.  **Calibration**: Implement calibration for the device. (Initial per-sensor range calibration is present).
+7.  **Calibration**: Implement calibration for the device. (Initial per-sensor range calibration is present).(Finished)
 8.  **UI/UX Refinement**: Improve the user experience based on testing and feedback.
 
 ### Potential Production Stack
