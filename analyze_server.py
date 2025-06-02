@@ -27,6 +27,7 @@ def analyze():
 
         result = {
             "summary": tag_count,
+            "tagged": tagged,
             "forceTrace": data["forceTrace"],
             "expectedNotes": data["expectedNotes"]
         }
@@ -43,10 +44,31 @@ def generate_prompt(result):
     summary = result["summary"]
     total = sum(summary.values())
 
-    prompt = f"In the last session, the player had:{total} presses:\n"
+    prompt = f"""You are an experienced stroke rehabilitation assistant helping patients improve finger motor control through dome-pressing exercises with a rhythm-based training game.
+    The patient uses three silicon domes mapped to thumb (0), index (1), and middle (2) fingers. Each press is classified and labeled as:
+    - normal, delay, early, too_weak, too_strong, too_short, too_long.
+    In the last session, the player had:{total} presses:\n"""
     for tag, count in summary.items():
         prompt += f"- {count} {tag.replace('_', ' ')}\n"
-    prompt += "\n\nPlease give friendly and concise feedback."
+    
+    # per finger
+    per_finger = {0: {}, 1: {}, 2: {}}
+    for item in result["tagged"]:
+        lane = item["lane"]
+        for tag in item["tags"]:
+            per_finger[lane][tag] = per_finger[lane].get(tag, 0) + 1
+
+    prompt += "\nHere is the breakdown by finger:\n"
+    for lane, finger_name in zip([0, 1, 2], ["Thumb", "Index", "Middle"]):
+        prompt += f"\n{finger_name} (Lane {lane}):\n"
+        tags = per_finger[lane]
+        if not tags:
+            prompt += "- No data\n"
+        else:
+            for tag, count in tags.items():
+                prompt += f"- {count} {tag.replace('_', ' ')}\n"
+    
+    prompt += "\n\nPlease give short, concise, encouraging feedback on how to improve, based on the data. Mention specific finger issues if applicable"
     return prompt
 
 @app.route("/feedback", methods=["POST"])
@@ -87,7 +109,7 @@ def analyze_force_trace(data):
     press_end_threshold = 0.1
 
     # Feature thresholds (in seconds or force units)
-    delay_threshold = 0.8
+    delay_threshold = 0.5
     early_threshold = -0.7
     short_threshold = 0.3
     long_threshold = 0.8
