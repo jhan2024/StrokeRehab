@@ -2,7 +2,7 @@
 load('multi_label_model.mat');  % Contains: models, tag_names, feature_names, threshold
 
 %% Step 2: Load test data
-test_file = 'test_data.mat';  % <-- 替换为你的测试数据文件
+test_file = 'test_data.mat';  % <-- Replace with your test data file
 loaded = load(test_file);
 Data = loaded.Data;
 
@@ -14,7 +14,7 @@ for i = 1:n_trials
     d = Data(i);
     curve = d.pressure_curve;
 
-    % 提取一致的特征（必须与训练阶段相同）
+    % Extract consistent features (must match the training stage)
     std_force = std(curve);
     num_peaks = numel(findpeaks(curve));
 %     d_curve = diff(curve);
@@ -25,18 +25,18 @@ for i = 1:n_trials
 
     x_test = [d.delay, d.duration, d.max_force, std_force, num_peaks];
 
-    % 初始化预测结果
+    % Initialize prediction results
     y_pred = zeros(1, numel(tag_names));
     score_pred = zeros(1, numel(tag_names));
 
-    % 逐标签预测
+    % Predict each label
     for j = 1:numel(tag_names)
         [~, score] = predict(models{j}, x_test);
-        score_pred(j) = score(2);  % 概率 / 正类得分
-        y_pred(j) = score(2) > threshold;  % 使用阈值判定标签
+        score_pred(j) = score(2);  % Probability / Positive class score
+        y_pred(j) = score(2) > threshold;  % Apply threshold to determine label
     end
 
-    % 输出结果
+    % Output results
     fprintf('\n--- Trial %d ---\n', i);
     has_label = false;
     for j = 1:numel(tag_names)

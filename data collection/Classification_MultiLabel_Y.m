@@ -17,7 +17,7 @@ for f = 1:length(file_list)
             std_force = std(curve);
             num_peaks = numel(findpeaks(curve));
 
-            % 增强特征
+            % Enhanced features
 %             d_curve = diff(curve);
 %             mean_diff = mean(d_curve);
 %             std_diff = std(d_curve);
@@ -57,7 +57,7 @@ models = cell(1, num_classes);
 %% Step 4: Train one classifier per label using Random Forest
 models = cell(1, num_classes);
 for i = 1:num_classes
-    % 样本权重（应对类别不平衡）
+    % Sample weights (in response to category imbalance)
     pos_weight = sum(YTrain(:,i)==0) / sum(YTrain(:,i)==1);
     sample_weights = YTrain(:,i) * pos_weight + (1 - YTrain(:,i));
     
@@ -69,11 +69,11 @@ end
 %% Step 5: Predict (with custom threshold)
 Y_pred = zeros(size(YTest));
 scores = zeros(size(YTest));
-threshold = 0.3;  % 自定义阈值
+threshold = 0.3;  % Custom threshold
 
 for i = 1:num_classes
     [~, score] = predict(models{i}, XTest);
-    scores(:,i) = score(:,2);  % 正类分数
+    scores(:,i) = score(:,2);  % Positive class score
     Y_pred(:,i) = score(:,2) > threshold;
 end
 
