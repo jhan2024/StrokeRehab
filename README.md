@@ -61,6 +61,19 @@ This panel contains the core application functionalities accessible via tabs:
         -   Input fields to set the `Pressure Range` for normalization for up to 3 sensors. Input fields for sensors 2 and 3 are shown/hidden based on selected device type.
     -   **Data Log**: Displays timestamped messages (e.g., simulator data, status messages). Includes `Start/Stop Logging` and `Clear Log` controls.
 
+-   **Analysis Tab**:
+    -   Provides post-session analysis of dome press data from Rhythm Keys sessions.
+    -   **Controls**: `Start Analysis` button triggers analysis of the most recent game session.
+    -   **Summary Panel**: Displays a breakdown of classified press patterns (Normal, Delay, Early, Too Weak, Too Strong, Too Short, Too Long, Jittery).
+    -   **AI Feedback Panel**: Streams AI-generated feedback based on the classification summary.
+    -   **Data Visualization**: Displays full force traces for all three domes (thumb, index, middle) aligned with expected note timings using Chart.js.
+    -   **Architecture**:
+        -   Requires running a local Flask server (`analyze_server.py`) and a local Ollama LLM server (serving the `mistral` model).
+        -   The tab interacts with these servers via HTTP requests to perform the analysis and retrieve AI feedback.
+    -   **Usage Notes**:
+        -   Before using the Analysis Tab, start both the Flask server and Ollama server locally.
+        -   Only available after completing a Rhythm Keys game session.
+
 ## Technical Architecture
 
 -   **Stack**: Vanilla HTML, CSS, and JavaScript. Chart.js is used for the measurement graph.
@@ -115,6 +128,14 @@ This panel contains the core application functionalities accessible via tabs:
         *   3-Dome device: Program to send JSON strings (`{"timestamp": <number>, "pressure": [val1, val2, val3]}` per line) at 9600 baud.
 2.  **Clone the Repository**: `git clone <repository-url>`
 3.  **Open the Interface**: Open `index.html` in your browser.
+4. **(Optional) Enable Analysis Tab**:  
+   If you plan to use the Analysis Tab, you must also start:
+    * The local Flask server:  
+      `python analyze_server.py`
+    * The local Ollama LLM server:  
+      `ollama serve` (ensure the `mistral` model is available: `ollama pull mistral`)
+
+    Without these servers running, the Analysis Tab will not function.
 
 ### Using Simulation Mode (Default)
 
